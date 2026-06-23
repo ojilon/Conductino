@@ -1,19 +1,16 @@
-app:
-  env: "development"
-  version: "1.0.0"
+window:
+  title: "Conductino Study Browser"
+  width: 1280
+  height: 720
+  debug: true # Set to true to right-click -> Inspect Element inside your app
 
-network:
-  host: "127.0.0.1"
-  port: 8080
-  ipc_mode: "tcp" # options: tcp, named_pipe
+ipc:
+  frontend_listen: "127.0.0.1:8080" # Where Go hosts your UI and handles JS fetch calls
+  backend_url: "http://127.0.0.1:8081" # Where your Zig backend microservice will listen
 
 storage:
-  db_path: "./data/study_vault.db"
-  notes_directory: "./data/notes/"
-  downloads_directory: "./data/downloads/"
-  cache_directory: "./data/cache/"
+  database_path: "./data/study_vault.db"
 
-security:
-  allowed_origins:
-    - "[http://127.0.0.1:8080](http://127.0.0.1:8080)"
-  enable_ssl_verification: true
+archive:
+  output_dir: "./data/downloads"
+  max_bytes: 104857600 # 100MB max file size limit for downloading archives
