@@ -1,1 +1,3 @@
-//intialize webview2 window and triggers app
+/*
+The front
+*/
