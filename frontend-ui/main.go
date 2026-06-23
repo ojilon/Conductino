@@ -131,4 +131,5 @@ func main() {
 	w.Bind("hostPing", func() string { return " pong from Go host"})
 
 	//Blocks until the window is closed
+	w.Run()
 }
