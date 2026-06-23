@@ -1,0 +1,41 @@
+# === Operating System Files ===
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# === IDE & Editor Configurations ===
+*.sublime-workspace
+.idea/
+
+# === Project Build Binaries ===
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+
+# === Zig Specific Builds & Cache ===
+zig-cache/
+zig-out/
+.zig-cache/
+
+# === Go Specific Files ===
+frontend-ui/frontend-ui.exe
+go.sum
+
+# === Application Runtime Data & Backups ===
+# This keeps your personal notes and database strictly local on Windows 11
+data/cache/
+data/downloads/
+data/notes/*
+data/study_vault.db
+
+# If you want Git to track your empty data folders but ignore the content:
+!data/notes/.gitkeep
+
+*.ps1
+*.sublime-package
+*.sublime-project
+guides/
+.clangd

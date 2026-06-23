@@ -1,0 +1,21 @@
+{
+  "app": {
+    "env": "development",
+    "version": "1.0.0"
+  },
+  "network": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "ipc_mode": "tcp"
+  },
+  "storage": {
+    "db_path": "./data/study_vault.db",
+    "notes_directory": "./data/notes/",
+    "downloads_directory": "./data/downloads/",
+    "cache_directory": "./data/cache/"
+  },
+  "security": {
+    "allowed_origins": ["[http://127.0.0.1:8080](http://127.0.0.1:8080)"],
+    "enable_ssl_verification": true
+  }
+}
