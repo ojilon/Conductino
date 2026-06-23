@@ -8,6 +8,7 @@ A modular research browser built with **Go** (frontend shell + IPC router) and
 ```
 Basic project structure
 ```
+```
 Conductino-study-browser/
 │
 ├── backend-core/          # Zig / C territory
@@ -31,12 +32,14 @@ Conductino-study-browser/
 │
 └── README.md
 
+```
+
 ---
 
-## Architecture
+### Architecture
 ---
 
-### Data Pipeline
+## Data Pipeline
 
 ```
 [Raw Input]
