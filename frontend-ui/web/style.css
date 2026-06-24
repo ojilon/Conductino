@@ -1,0 +1,129 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   style.css — Visual "skin" of My Study Browser.
+   Pure CSS. No build step. No external fonts (WebView2 can be offline).
+   ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg:        #1a1a2e;
+  --surface:   #16213e;
+  --border:    #0f3460;
+  --panel:     #0d1117;
+  --text:      #eaeaea;
+  --muted:     #a0a0a0;
+  --accent:    #e94560;
+  --go-blue:   #00add8;
+  --zig-amber: #f7a41d;
+  --sqlite:    #0f80cc;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Control bar ─────────────────────────────────────────────────────── */
+#controls {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+#controls button {
+  background: transparent; color: var(--muted);
+  border: 1px solid transparent; border-radius: 6px;
+  width: 32px; height: 32px; font-size: 14px;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+#controls button:hover { background: rgba(255,255,255,.05); color: #fff; }
+
+#urlbar { flex: 1; display: flex; align-items: center;
+          background: var(--panel); border: 1px solid var(--border);
+          border-radius: 8px; padding: 4px 10px; gap: 8px; }
+#urlbar .lock { font-size: 11px; color: #4ade80; }
+#urlbar input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #fff; font: 13px/1 ui-monospace, "Fira Code", monospace;
+}
+
+/* ── Workspace ───────────────────────────────────────────────────────── */
+main {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  height: calc(100% - 48px);
+}
+
+#webview-pane { position: relative; background: var(--panel); }
+#webview {
+  width: 100%; height: 100%; border: 0; background: #fff;
+}
+
+/* Floating selection toolbar. Positioned absolutely by app.js. */
+#highlight-toolbar {
+  position: absolute; z-index: 50;
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  transform: translateX(-50%);
+}
+#highlight-toolbar.hidden { display: none; }
+#highlight-toolbar button {
+  background: transparent; border: 0; padding: 4px 6px;
+  font-size: 14px; cursor: pointer; border-radius: 4px;
+}
+#highlight-toolbar button:hover { background: rgba(255,255,255,.08); }
+#highlight-toolbar .sep { width: 1px; height: 16px; background: var(--border); }
+
+/* ── Study sidebar ───────────────────────────────────────────────────── */
+#sidebar {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 12px;
+  overflow: hidden;
+}
+#sidebar h2 {
+  margin: 0 0 10px; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+#search-form { display: flex; gap: 6px; margin-bottom: 10px; }
+#search-form input {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; color: #fff; font-size: 12px;
+  outline: none;
+}
+#search-form button {
+  background: var(--accent); color: #fff; border: 0;
+  border-radius: 6px; padding: 0 10px; font-size: 12px; cursor: pointer;
+}
+
+#status { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+#status-dot { color: #4ade80; }
+#status-dot.down { color: var(--accent); }
+
+#highlight-list {
+  list-style: none; margin: 0; padding: 0;
+  overflow-y: auto; flex: 1;
+}
+#highlight-list li {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;
+  font-size: 12px;
+}
+#highlight-list .selection { color: #fff; line-height: 1.4; }
+#highlight-list .meta {
+  color: var(--muted); font-size: 10px; margin-top: 4px;
+  display: flex; justify-content: space-between;
+}
+#highlight-list .ctx {
+  color: var(--muted); font-style: italic;
+  border-top: 1px dashed var(--border); padding-top: 4px; margin-top: 4px;
+  font-size: 10px;
+}
