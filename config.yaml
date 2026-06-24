@@ -1,16 +1,18 @@
 window:
   title: "Conductino Study Browser"
   width: 1280
-  height: 720
-  debug: true # Set to true to right-click -> Inspect Element inside your app
+  height: 900
+  debug: true # Set to true to right-click -> Inspect Element inside your app, opens DevTools inside WebView2
 
 ipc:
-  frontend_listen: "127.0.0.1:8080" # Where Go hosts your UI and handles JS fetch calls
-  backend_url: "http://127.0.0.1:8081" # Where your Zig backend microservice will listen
+  frontend_listen: "127.0.0.1:8080" # Where Go hosts your UI and handles JS fetch calls(js inside webview2 talks to this.)
+  backend_url: "http://127.0.0.1:8081" # Where your Zig backend microservice will listen(Go forwards JSon packets to this address.)
 
 storage:
-  database_path: "./data/study_vault.db"
+  #The Zig backend creates / opens this SQLite file
+  database_path: "./research.db"
 
+#Used by the handlers/api.go (golang.org/x/net/html)
 archive:
-  output_dir: "./data/downloads"
+  output_dir: "./archives"
   max_bytes: 104857600 # 100MB max file size limit for downloading archives
