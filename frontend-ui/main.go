@@ -27,13 +27,14 @@ ARCHITECTURE
 package main
 
 import (
+	"Conductino/handlers"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	webview "github.com/webview/webview_go"//native webview2 wrapper
-	"gopkg.in/yaml.v3" //yaml config parser
+	webview "github.com/webview/webview_go" //native webview2 wrapper
+	"gopkg.in/yaml.v3"                      //yaml config parser
 )
 
 //config(mirrors the config.yaml)
@@ -93,7 +94,7 @@ func startIPCServer(cfg *Config){
 
 	log.Printf("[Go IPC] listening on %s", cfg.IPC.FrontendListen)
 	if err := http.ListenAndServe(cfg.IPC.FrontendListen, mux); err != nil {
-		log.Fatalf("IPC server crached: %v", err)
+		log.Fatalf("IPC server crashed: %v", err)
 	}
 }
 

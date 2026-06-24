@@ -1,0 +1,86 @@
+<!--
+  index.html — UI shell loaded by WebView2.
+
+  This file is served by the Go IPC router at http://127.0.0.1:8080/ui/
+  (see main.go → http.FileServer). It contains NO backend logic — it is
+  pure HTML/CSS/JS and reaches the Zig backend ONLY through the JSON
+  REST API exposed by Go.  That is the Local Context Isolation boundary.
+
+  Layout (three modules, as per the spec):
+    ┌─────────────────────────────────────────────────────┐
+    │  CONTROL BAR  (back / fwd / url / new tab)          │
+    ├──────────────────────────────────┬──────────────────┤
+    │                                  │                  │
+    │  ACTIVE WEBVIEW DISPLAY PANE     │  STUDY SIDEBAR   │
+    │  (an <iframe sandbox> for any    │  (highlights,    │
+    │   remote page – isolated even    │   notes, search) │
+    │   from the shell itself)         │                  │
+    │                                  │                  │
+    └──────────────────────────────────┴──────────────────┘
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Conductino Study Browser</title>
+  <link rel="stylesheet" type="text/css" href="./style.css">
+</head>
+<body>
+  <!-- CONTROL BAR -------------- -->
+  <header id="controls">
+    <button id="btn-back" title="Back">◀</button>
+    <button id="btn-fwd" title="Forward">▶</button>
+    <button id="btn-reload" title="Reload">⟳</button>
+
+    <form id="urlbar">
+      <span class="lock">🔒</span>
+      <input id="url" type="text" value="https:ziglang.org/documentation/master/" autocomplete="off" spellcheck="false" />
+    </form>
+
+    <button id="btn-archive" title="Archive this page (Go /api/archive)">⤓</button>
+    <button id="btn-sidebar" title="Toggle sidebar">☰</button>
+
+  </header>
+
+  <!-- MAINWORKSPACE -->
+  <main>
+      <!-- The actual web content. sandbox= keeps it from touching window.* -->
+      <section id="webview-pane">
+          <iframe id="webview" src="https://ziglang.org/documentation/master/" sandbox="allow-same-origin allow-scripts allow-forms" referrerpolicy="no-referrer"></iframe>
+
+        <!-- Floating toolbar that appears over a text selection. -->
+        <div id="highlight-toolbar" class="hidden">
+        <button data-color="#e94560" title="Red">🔴</button>
+        <button data-color="#f7a41d" title="Orange (Zig)">🟠</button>
+        <button data-color="#00add8" title="Blue (Go)">🔵</button>
+        <button data-color="#4ade80" title="Green">🟢</button>
+        <span class="sep"></span>
+        <button id="btn-add-note" title="Add note">📝</button>
+      </div>
+      </section>
+
+       <!-- ── 3. STUDY SIDEBAR ─────────────────────────────────────────── -->
+    <aside id="sidebar">
+      <h2>📚 Study Sidebar</h2>
+
+      <form id="search-form">
+        <input id="search" type="search" placeholder="Search highlights…" />
+        <button type="submit">Search</button>
+      </form>
+
+      <div id="status">backend: <span id="status-dot">●</span></div>
+
+      <ul id="highlight-list">
+        <!-- Highlights are injected by app.js after /api/save_note succeeds.
+             Each <li> shows:  selection · context · color bar · page title -->
+      </ul>
+    </aside>
+  </main>
+
+  <!-- Script must load LAST so the DOM exists. type="module" not required;
+       we deliberately keep this script ES5-friendly so it runs in any
+       WebView2 / WebKit / WebKitGTK runtime. -->
+  <script src="./app.js"></script>
+</body>
+</html>
