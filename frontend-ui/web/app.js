@@ -14,7 +14,7 @@
     "use strict";
 
     //DOM refs
-    const $iframe = document.getElementById("webiew");
+    const $iframe = document.getElementById("webview");
     const $toolbar  = document.getElementById("highlight-toolbar");
       const $list     = document.getElementById("highlight-list");
       const $url      = document.getElementById("url");
@@ -30,11 +30,44 @@
     let currentSelection = null; //{text, context, rect, coords}
 
     //1.URL bar
+    /*
+    checking whether the input looks like a web url, eg has a domain suffix
+    like .com or starts with http, if not, redirect it to a search ening like Google.
+    */
+    function looksLikeURL(input) {
+        // add protocol if missing so URL() can parse it
+        const withProto = /^https?:\/\//i.test(input) ? input : "https://" + input;
+        try {
+            const u = new URL(withProto);
+            // URL() accepts things like "https://word" (no TLD) so add a
+            // small extra check: hostname must have a dot OR be localhost
+            return u.hostname.includes(".") || u.hostname === "localhost";
+        } catch (_) {
+            return false;
+        }
+    }
+
     $urlForm.addEventListener("submit", function (e) {
         e.preventDefault();
-        $iframe.src = $url.value;
+        let input = $url.value.trim();
+        if(!input) return;
+
+        let displayURL;
+        if (looksLikeURL(input)) {
+            const full = /^https?:\/\//i.test(input) ? input : "https://" + input;
+            displayURL = full;
+            $iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(full);
+        } else {
+            const searchURL = "https://www.google.com/search?q=" + encodeURIComponent(input);
+            displayURL = searchURL;
+            $iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(searchURL);
+        }
+
+        $url.value = displayURL;
     });
-    $btnBack.onclick = function () { history.back(); };
+
+
+    $btnBack.onclick = function () { $iframe.contentWindow.history.back(); };
     $btnFwd.onclick = function () {history.forward(); };
     $btnRel.onclick = function () {$iframe.src = $iframe.src; };
 
@@ -97,10 +130,12 @@
 
     //Try to attach to the iframe doc when it loads(same origin only).
     $iframe.addEventListener("load", function () {
+        //update the url bar when iframe navigates itself
         try {
-            const doc = $iframe.contentDocument;
-            if (!doc) return;
-            doc.addEventListener("selectionchange", function () {pickUpSelection(doc); });
+            const loc = $iframe.contentDocument.location.href;
+            if (!loc && loc !== "about:blank") {
+                $url.value = loc;
+            }
         } catch (_) { /*corss-orogin - ignored */}
     });
     //Also listen on the host document (works for archived / local pages).

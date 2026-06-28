@@ -35,6 +35,8 @@ import (
 
 	webview "github.com/webview/webview_go" //native webview2 wrapper
 	"gopkg.in/yaml.v3"                      //yaml config parser
+
+	"Conductino/pathutil"
 )
 
 //config(mirrors the config.yaml)
@@ -88,9 +90,10 @@ func startIPCServer(cfg *Config){
 	//Hand off the JSON API endpoints to the handlers package.
 	api := handlers.NewBackendClient(cfg.IPC.BackendURL)
 	mux.HandleFunc("/api/save_note", api.SaveNoteHandler)
-	mux.HandleFunc("/spi/search", api.SearchHandler)
+	mux.HandleFunc("/api/search", api.SearchHandler)
 	mux.HandleFunc("/api/archive", api.ArchiveHandler)//uses golang.org/x/net/html
-	mux.HandleFunc("api/pdf", api.PDFHandler) // uses github.com/ledongthuc/pdf
+	mux.HandleFunc("/api/pdf", api.PDFHandler) // uses github.com/ledongthuc/pdf
+	mux.HandleFunc("/api/proxy", api.ProxyHandler)
 
 	log.Printf("[Go IPC] listening on %s", cfg.IPC.FrontendListen)
 	if err := http.ListenAndServe(cfg.IPC.FrontendListen, mux); err != nil {
@@ -100,7 +103,28 @@ func startIPCServer(cfg *Config){
 
 // the main ------------------------------------------
 func main() {
-	cfg, err := loadConfig("config.yaml")
+	/*
+	os.Getwd() returns wherever the shell is when you run the program, not where main.go lives. So if you cd somewhere else and run the binary, it anchors from there.
+    For development this is fine — you always run from the project root. If you later package the binary for distribution, switch the anchor to:
+	
+	exe, _ := os.Executable()
+    anchor := filepath.Dir(exe)
+
+    And put config.yaml next to the binary. The FindFile function works the same either way — you just change what you pass in.
+	*/
+
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cfgPath, err := pathutil.FindFile(cwd, "config.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cfg, err := loadConfig(cfgPath)
 	if err != nil {
 		log.Fatal(err)
 	}

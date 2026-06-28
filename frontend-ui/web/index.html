@@ -35,7 +35,13 @@
 
     <form id="urlbar">
       <span class="lock">🔒</span>
-      <input id="url" type="text" value="https:ziglang.org/documentation/master/" autocomplete="off" spellcheck="false" />
+      <input 
+        id="url" 
+        type="text" 
+        autocomplete="off" 
+        spellcheck="false" 
+        placeholder="Type a URL or search the web..."
+      />
     </form>
 
     <button id="btn-archive" title="Archive this page (Go /api/archive)">⤓</button>
@@ -47,13 +53,13 @@
   <main>
       <!-- The actual web content. sandbox= keeps it from touching window.* -->
       <section id="webview-pane">
-          <iframe id="webview" src="https://ziglang.org/documentation/master/" sandbox="allow-same-origin allow-scripts allow-forms" referrerpolicy="no-referrer"></iframe>
+          <iframe id="webview" sandbox="allow-same-origin allow-scripts allow-forms" referrerpolicy="no-referrer"></iframe>
 
         <!-- Floating toolbar that appears over a text selection. -->
         <div id="highlight-toolbar" class="hidden">
         <button data-color="#e94560" title="Red">🔴</button>
-        <button data-color="#f7a41d" title="Orange (Zig)">🟠</button>
-        <button data-color="#00add8" title="Blue (Go)">🔵</button>
+        <button data-color="#f7a41d" title="Orange">🟠</button>
+        <button data-color="#00add8" title="Blue">🔵</button>
         <button data-color="#4ade80" title="Green">🟢</button>
         <span class="sep"></span>
         <button id="btn-add-note" title="Add note">📝</button>

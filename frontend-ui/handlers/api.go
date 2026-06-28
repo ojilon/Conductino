@@ -277,3 +277,50 @@ func ( c *BackendClient) PDFHandler (w http.ResponseWriter, r *http.Request) {
 	r.ContentLength = int64(len(out))
 	c.forward(w, r, "/save")
 }
+
+
+//--------------api/proxy -----------------------
+func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 1. Read ?url=
+	targetURL := r.URL.Query().Get("url")
+	if targetURL == "" {
+		http.Error(w, "missing url parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Optional: validate URL
+	if _, err := url.ParseRequestURI(targetURL); err != nil {
+		http.Error(w, "invalid URL", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Download the page
+	resp, err := http.Get(targetURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 3. Remove headers that stop embedding
+	resp.Header.Del("X-Frame-Options")
+	resp.Header.Del("Content-Security-Policy")
+
+	// 4. Copy remaining headers
+	for k, values := range resp.Header {
+		for _, v := range values {
+			w.Header().Add(k, v)
+		}
+	}
+
+	// Send same status code
+	w.WriteHeader(resp.StatusCode)
+
+	// Stream body directly
+	io.Copy(w, resp.Body)
+}
