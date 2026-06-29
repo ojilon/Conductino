@@ -119,7 +119,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cfgPath, err := pathutil.FindFile(cwd, "config.yml")
+	cfgPath, err := pathutil.FindFile(cwd, "config.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}

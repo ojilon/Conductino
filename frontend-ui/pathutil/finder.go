@@ -17,14 +17,17 @@ func FindFile(anchor, name string) (string, error) {
 	dir := anchor
 	for {
 		candidate := filepath.Join(dir, name)
-		if _, err := os.Stat(candidate), err == nil {
+		if _, err := os.Stat(candidate); err == nil {
 			return  candidate, nil
 		}
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			//reached the filesystem root
-			return "",fmt.Errorf("file %d not found from %s upward", name, anchor)
+			if _, err := os.Stat(candidate); err == nil{
+				return  candidate, nil
+			}
+			return "",fmt.Errorf("file %s not found from %s upward", name, anchor)
 		}
 		dir = parent
 	}
