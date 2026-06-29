@@ -39,3 +39,4 @@ data/study_vault.db
 *.sublime-project
 guides/
 .clangd
+frontend_combined.txt
