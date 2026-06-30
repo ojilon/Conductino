@@ -293,6 +293,8 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing url parameter", http.StatusBadRequest)
 		return
 	}
+
+	log.Println("----------------------------------------------")
 	log.Println("\n\nDownloading: ", targetURL)
 
 	// Optional: validate URL
@@ -310,6 +312,12 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	resp, err := client.Get(targetURL)
+	
+	//response debugging added
+	log.Println("Final URL     :", resp.Request.URL.String())
+	log.Println("Status        :", resp.Status)
+	log.Println("Content-Type  :", resp.Header.Get("Content-Type"))
+	
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
