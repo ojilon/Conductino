@@ -158,3 +158,56 @@ func main() {
 	//Blocks until the window is closed
 	w.Run()
 }
+
+
+/*
+BROWSER DEVELOPMENT ORDER
+
+Stage 1  ✔
+- Basic navigation
+- URL normalization
+- HTML downloading
+- HTML rewriting
+- Relative URL handling
+
+Stage 2
+- CSS support
+- JavaScript resources
+- Images
+- Fonts
+- Media resources
+- Downloads
+
+Stage 3
+- History
+- Bookmarks
+- Address bar suggestions
+- Download manager
+- Cookies
+- Cache
+
+Stage 4
+- Tabs
+- Tab groups
+- Split views
+- Session restore
+- Reader mode
+
+Stage 5
+- AI integration
+- Notes
+- Highlights
+- Local knowledge base
+- Search indexing
+- PDF annotations
+
+Stage 6
+- Security
+- Sandboxing
+- Extension system
+- Synchronization
+- Performance optimization
+
+The browser should always grow from the networking layer upward.
+Do not add UI features before the underlying browser engine can support them.
+*/

@@ -12,6 +12,7 @@
 //                                   local PDF files in PDFHandler.
 // ─────────────────────────────────────────────────────────────────────────────
 
+
 package handlers
 
 import (
@@ -303,6 +304,28 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	/*proposed future additon
+	func NewHTTPClient() *http.Client {
+
+		return &http.Client{
+
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+
+				log.Println("Redirect ->", req.URL.String())
+
+				return nil
+			},
+		}
+	}
+
+	then client becomes
+	client := NewHTTPClient()
+
+	to lATER add things like 
+	cookies, proxy support, custom User-Agent, TLS settings without
+	touching the function ProxyHAndler
+	*/
+
 	// 2. Download the page
 	//add capability to watch every redirect
 	client := &http.Client{
@@ -311,6 +334,17 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return nil
 		},
 	}
+
+	/*
+	possible addition, refactor
+	req, _ := http.NewRequest(...)
+
+	comes in when we need:
+	 -headers
+	 -cookies
+	 -POST
+	 -authentication
+	*/
 	resp, err := client.Get(targetURL)
 	
 	//response debugging added
@@ -366,3 +400,163 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+
+/*
+================================================================================
+FUTURE ARCHITECTURE NOTE - NAVIGATION CONTEXT
+================================================================================
+
+Current ProxyHandler() works using several independent local variables:
+
+    targetURL
+    contentType
+    statusCode
+    body
+    resp
+
+This is fine while the browser is small.
+
+However, as more browser features are added, these values will need to be shared
+between many parts of the program. Instead of passing many separate variables,
+create a single structure representing the current page navigation.
+
+Example:
+
+type PageContext struct {
+    TargetURL   *url.URL
+    FinalURL    *url.URL
+    StatusCode  int
+    ContentType string
+    Body        []byte
+}
+
+Future fields may include:
+
+    Method          string
+    RequestHeaders  http.Header
+    ResponseHeaders http.Header
+    Cookies         []*http.Cookie
+    Referrer        string
+    RedirectChain   []string
+    DownloadedAt    time.Time
+    IsHTML          bool
+    TabID           int
+    NavigationID    int
+
+Eventually ProxyHandler() becomes something like:
+
+    ctx := NewPageContext(targetURL)
+
+    DownloadPage(ctx)
+    RewriteHTML(ctx)
+    RecordHistory(ctx)
+    DetectDownloads(ctx)
+    UpdateTab(ctx)
+    SendResponse(ctx)
+
+Benefits:
+
+- One object represents the entire navigation.
+- Easier to pass information between browser components.
+- Future features won't require changing many function signatures.
+- Makes debugging easier because one structure contains everything about
+  the current page.
+- Similar design is used in real browsers, where a navigation object
+  carries request and response state through the loading pipeline.
+
+================================================================================
+Possible future browser pipeline
+
+User enters URL
+        │
+        ▼
+Normalize URL
+        │
+        ▼
+Create PageContext
+        │
+        ▼
+Send HTTP Request
+        │
+        ▼
+Receive Response
+        │
+        ▼
+Detect Content-Type
+        │
+        ▼
+If HTML
+    Parse HTML
+        │
+        ▼
+Walk DOM Tree
+        │
+        ▼
+Rewrite Resources
+        │
+        ▼
+Render HTML
+Else
+    Stream Resource Directly
+        │
+        ▼
+Update Tab State
+        │
+        ▼
+Record History
+        │
+        ▼
+Handle Downloads
+        │
+        ▼
+Send Final Response to WebView
+
+================================================================================
+Future browser features that can use PageContext
+
+Navigation
+    - Back / Forward
+    - Reload
+    - Tabs
+    - Split View
+
+History
+    - Visited pages
+    - Search history
+    - Most visited
+    - Typed URLs
+
+Downloads
+    - Download manager
+    - Pause / Resume
+    - Progress tracking
+
+Security
+    - HTTPS information
+    - Certificate details
+    - Mixed content detection
+    - Safe browsing checks
+
+Study Features
+    - AI summarization
+    - Highlight storage
+    - Notes
+    - Bookmarks
+    - Reading progress
+    - Offline page storage
+
+Networking
+    - Redirect tracking
+    - Cookies
+    - Cache
+    - Compression
+    - Custom headers
+    - User-Agent switching
+
+This is NOT necessary yet.
+Keep ProxyHandler simple while learning HTTP.
+Introduce PageContext only after networking becomes stable and additional
+browser features begin sharing the same navigation information.
+================================================================================
+*/
