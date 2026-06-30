@@ -30,6 +30,16 @@ func RewriteHTML(body []byte, baseURL *url.URL) ([]byte, error){
 	return out.Bytes(), nil
 }
 
+/*
+More items to look out for
+<base href="..."> tags, which change the base URL for all relative links.
+CSS resources, including url(...) inside stylesheets and inline <style> blocks.
+srcset on responsive images.
+JavaScript-generated URLs from fetch(), XMLHttpRequest, or dynamic DOM manipulation.
+Cookies, redirects, and other HTTP behaviors.
+Additional HTML attributes like poster, data-*, and meta refresh URLs.
+*/
+
 func walk(node *html.Node, baseURL *url.URL) {
 
 	//Only care about the html elements

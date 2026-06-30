@@ -17,6 +17,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -293,6 +294,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing url parameter", http.StatusBadRequest)
 		return
 	}
+	log.Println("\n\nDownloading: ", targetURL)
 
 	// Optional: validate URL
 	if _, err := url.ParseRequestURI(targetURL); err != nil {
@@ -301,7 +303,14 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Download the page
-	resp, err := http.Get(targetURL)
+	//add capability to watch every redirect
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			log.Println("Redirect ->", req.URL.String())
+			return nil
+		},
+	}
+	resp, err := client.Get(targetURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
