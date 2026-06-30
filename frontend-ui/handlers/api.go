@@ -320,15 +320,6 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	resp.Header.Del("X-Frame-Options")
 	resp.Header.Del("Content-Security-Policy")
 
-	// 4. Copy remaining headers
-	for k, values := range resp.Header {
-		for _, v := range values {
-			w.Header().Add(k, v)
-		}
-	}
-
-	// Send same status code
-	w.WriteHeader(resp.StatusCode)
 
 	// Stream body directly
 	body, err := io.ReadAll(resp.Body)
@@ -350,6 +341,16 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// 4. Copy remaining headers
+	for k, values := range resp.Header {
+		for _, v := range values {
+			w.Header().Add(k, v)
+		}
+	}
+
+	// Send same status code
+	w.WriteHeader(resp.StatusCode)
 	
 	_, err = w.Write(body)
 	if err != nil {
