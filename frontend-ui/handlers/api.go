@@ -17,7 +17,6 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -340,7 +339,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	//handle rewriting links to the resources of downloaded response
 	contentType := resp.Header.Get("Content-Type")
-	if strings.Contains(contentType, "text/html") {
+	if IsHTML(contentType) {
 
 		baseURL, err := url.Parse(targetURL)
 		if err == nil {
