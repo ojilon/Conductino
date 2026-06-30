@@ -14,11 +14,12 @@
 
 package handlers
 
-import(
+import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,7 +27,7 @@ import(
 	"strings"
 	"time"
 
-	"github.com/ledongthuc/pdf" //local-PDF text edtractor
+	"github.com/ledongthuc/pdf"   //local-PDF text edtractor
 	xhtml "golang.org/x/net/html" //streaming HTMl% tokenizer
 )
 
@@ -326,6 +327,20 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	//handle rewriting links to the resources of downloaded response
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "text/html") {
+
+		baseURL, err := url.Parse(targetURL)
+		if err == nil {
+
+			body, err = RewriteHTML(body, baseURL)
+			if err != nil {
+				log.Println(err)
+			}
+		}
 	}
 	
 	_, err = w.Write(body)
