@@ -10,22 +10,11 @@
 //   This script can ONLY reach the backend via fetch('/api/...') against
 //   the same origin (127.0.0.1:8080). It has NO direct access to SQLite,
 //   the file system, or the Zig process. The Go router is the gatekeeper.
+
+import { DOM } from "./js/dom";
+
 (function () {
     "use strict";
-
-    //DOM refs
-    const $iframe = document.getElementById("webview");
-    const $toolbar  = document.getElementById("highlight-toolbar");
-      const $list     = document.getElementById("highlight-list");
-      const $url      = document.getElementById("url");
-      const $urlForm  = document.getElementById("urlbar");
-      const $search   = document.getElementById("search");
-      const $searchF  = document.getElementById("search-form");
-      const $statusD  = document.getElementById("status-dot");
-      const $btnArc   = document.getElementById("btn-archive");
-      const $btnBack  = document.getElementById("btn-back");
-      const $btnFwd   = document.getElementById("btn-fwd");
-      const $btnRel   = document.getElementById("btn-reload");
 
     let currentSelection = null; //{text, context, rect, coords}
 
@@ -47,29 +36,29 @@
         }
     }
 
-    $urlForm.addEventListener("submit", function (e) {
+    DOM.urlForm.addEventListener("submit", function (e) {
         e.preventDefault();
-        let input = $url.value.trim();
+        let input = DOM.url.value.trim();
         if(!input) return;
 
         let displayURL;
         if (looksLikeURL(input)) {
             const full = /^https?:\/\//i.test(input) ? input : "https://" + input;
             displayURL = full;
-            $iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(full);
+            DOM.iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(full);
         } else {
             const searchURL = "https://www.google.com/search?q=" + encodeURIComponent(input);
             displayURL = searchURL;
-            $iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(searchURL);
+            DOM.iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(searchURL);
         }
 
-        $url.value = displayURL;
+        DOM.url.value = displayURL;
     });
 
 
-    $btnBack.onclick = function () { $iframe.contentWindow.history.back(); };
-    $btnFwd.onclick = function () {history.forward(); };
-    $btnRel.onclick = function () {$iframe.src = $iframe.src; };
+    DOM.btnBack.onclick = function () { DOM.iframe.contentWindow.history.back(); };
+    DOM.btnFwd.onclick = function () {history.forward(); };
+    DOM.btnRel.onclick = function () {DOM.iframe.src = DOM.iframe.src; };
 
     /*2. Selection capture inside iframe
 
@@ -119,22 +108,22 @@
     function showToolbar(rect) {
         //position the toolbar above the selection (inside the iframe).
         const paneRect = document.getElementById("webiew-pane").getBoundingClientRect();
-        $toolbar.style.left  = (paneRect.left + rect.left + rect.width / 2) + "px";
-        $toolbar.style.top = (paneRect.top + rect.top - 44) + "px";
-        $toolbar.classList.remove("hidden");
+        DOM.toolbar.style.left  = (paneRect.left + rect.left + rect.width / 2) + "px";
+        DOM.toolbar.style.top = (paneRect.top + rect.top - 44) + "px";
+        DOM.toolbar.classList.remove("hidden");
     }
     function hideToolbar() {
-        $toolbar.classList.add("hidden");
+        DOM.toolbar.classList.add("hidden");
         currentSelection = null;
     }
 
     //Try to attach to the iframe doc when it loads(same origin only).
-    $iframe.addEventListener("load", function () {
+    DOM.iframe.addEventListener("load", function () {
         //update the url bar when iframe navigates itself
         try {
-            const loc = $iframe.contentDocument.location.href;
+            const loc = DOM.iframe.contentDocument.location.href;
             if (!loc && loc !== "about:blank") {
-                $url.value = loc;
+                DOM.url.value = loc;
             }
         } catch (_) { /*corss-orogin - ignored */}
     });
@@ -142,7 +131,7 @@
     document.addEventListener("selectionchange", function () {pickUpSelection(document); });
 
     //3. Highlight toolbar buttons -> POST /api/save_notes --------------------------
-    Array.prototype.forEach.call($toolbar.querySelectorAll("button[data-color]"),
+    Array.prototype.forEach.call(DOM.toolbar.querySelectorAll("button[data-color]"),
         function (btn) {
           btn.addEventListener("click", function () {
             saveNote(btn.getAttribute("data-color"));
@@ -156,8 +145,8 @@
     function saveNote(color, extraNote) {
         if(!currentSelection) return;
         const packet = {
-            page_url:   $iframe.src,
-            page_title: $iframe.contentDocument ? $iframe.contentDocument.title : "",
+            page_url:   DOM.iframe.src,
+            page_title: DOM.iframe.contentDocument ? DOM.iframe.contentDocument.title : "",
             selection:  currentSelection.text,
             context:    (extraNote ? extraNote + " · " : "") + currentSelection.context,
             color:      color,
@@ -181,29 +170,29 @@
         })
         .catch(function (err) {
             console.error("save_note failed:", err);
-            $statusD.classList.add("down");
+            DOM.statusD.classList.add("down");
         });
     }
 
     //4. Search -> GET api/search -------------------
-    $searchF.addEventListener("submit", function (e){
+    DOM.searchF.addEventListener("submit", function (e){
         e.preventDefault();
-        const q = $search.value.trim();
+        const q = DOM.search.value.trim();
         if (!q) return;
         fetch("/api/search?query=" + encodeURIComponent(q))
           .then(function (r) {return r.json(); })
           .then(function (data) {
-            $list.innerHTML = "";
+            DOM.list.innerHTML = "";
             (data.results || []). forEach(perpendHighlight);
           });
     });
 
     //5. Archive button -> POST /api/archive 
-    $btnArc.addEventListener("click", function () {
+    DOM.btnArc.addEventListener("click", function () {
         fetch("/api/archive", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body:   JSON.stringify({url: $iframe.src })
+            body:   JSON.stringify({url: DOM.iframe.src })
         }).then(function () {console.log("archived"); });
     });
 
@@ -218,7 +207,7 @@
              '<span>' + escapeHTML(h.page_title || h.page_url) + '</span>' + 
              '<span>' + new Date(h.created_at || Date.now()).toLocaleTimeString()+ '<span>' +
             '</div>';
-        $list.insertBefore(li, $list.firstChild);
+        DOM.list.insertBefore(li, DOM.list.firstChild);
     }
     function escapeHTML(s) {
         return String(s).replace(/[&<>"']/g, function (c) {
@@ -229,8 +218,8 @@
     // Heartbeat
     setInterval(function () {
         fetch("/api/search?query=__ping__")
-        .then(function (r) { $statusD.classList.toggle("down", !r.ok); })
-        .catch(function () {$statusD.classList.add("down"); });
+        .then(function (r) { DOM.statusD.classList.toggle("down", !r.ok); })
+        .catch(function () {DOM.statusD.classList.add("down"); });
     }, 10000);
 
 })();
