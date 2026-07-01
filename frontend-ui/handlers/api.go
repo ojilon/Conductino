@@ -298,13 +298,13 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("----------------------------------------------")
 	log.Println("\n\nDownloading: ", targetURL)
 
-	// Optional: validate URL
+	//validate URL
 	if _, err := url.ParseRequestURI(targetURL); err != nil {
 		http.Error(w, "invalid URL", http.StatusBadRequest)
 		return
 	}
 
-	/*proposed future additon
+	/*proposed future refactor
 	func NewHTTPClient() *http.Client {
 
 		return &http.Client{
@@ -345,18 +345,17 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	 -POST
 	 -authentication
 	*/
-	resp, err := client.Get(targetURL)
-	
-	//response debugging added
-	log.Println("Final URL     :", resp.Request.URL.String())
-	log.Println("Status        :", resp.Status)
-	log.Println("Content-Type  :", resp.Header.Get("Content-Type"))
-	
+	resp, err := client.Get(targetURL)	
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //always use this to prevent memory leaks
+
+	//response debugging added
+	log.Println("Final URL     :", resp.Request.URL.String())
+	log.Println("Status        :", resp.Status)
+	log.Println("Content-Type  :", resp.Header.Get("Content-Type"))
 
 	// 3. Remove headers that stop embedding
 	resp.Header.Del("X-Frame-Options")
@@ -369,6 +368,11 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	//log.Println("\n\n---------------------------------------")
+	//log.Println(string(body))
+	//log.Println("-------------------------------------------")
+	//log.Println("-------------------------------------------")
 
 	//handle rewriting links to the resources of downloaded response
 	contentType := resp.Header.Get("Content-Type")
@@ -383,6 +387,9 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	//log.Println(string(body))
+	//log.Println("-------------------------------------------")
 
 	// 4. Copy remaining headers
 	for k, values := range resp.Header {
