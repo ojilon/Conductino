@@ -67,12 +67,14 @@ type SearchResults struct {
 type BackendClient struct {
 	baseURL string
 	http *http.Client
+	Browser *Browser
 }
 
 func NewBackendClient(baseURL string) *BackendClient {
 	return &BackendClient{
 		baseURL: baseURL,
 		http: &http.Client{Timeout: 5 * time.Second},
+		Browser: NewBrowser(),
 	}
 }
 
@@ -326,38 +328,36 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	touching the function ProxyHAndler
 	*/
 
-	// 2. Download the page
-	//add capability to watch every redirect
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			log.Println("Redirect ->", req.URL.String())
-			return nil
-		},
-	}
-
-	/*
-	possible addition, refactor
-	req, _ := http.NewRequest(...)
-
-	comes in when we need:
-	 -headers
-	 -cookies
-	 -POST
-	 -authentication
-	*/
-	resp, err := client.Get(targetURL)	
+	//create the request
+	req, err := http.NewRequest(
+		http.MethodGet,
+		targetURL,
+		nil,
+	)	
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close() //always use this to prevent memory leaks
+
+	// Set required custom headers
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+
+    //execute request to get response
+    resp, err := c.Browser.Do(req)
+    if err != nil {
+    	http.Error(w, err.Error(), http.StatusBadGateway)
+    }
+    defer resp.Body.Close()
 
 	//response debugging added
 	log.Println("Final URL     :", resp.Request.URL.String())
 	log.Println("Status        :", resp.Status)
 	log.Println("Content-Type  :", resp.Header.Get("Content-Type"))
 
-	// 3. Remove headers that stop embedding
+	// 3. Remove headers that stop embedding in Webview
 	resp.Header.Del("X-Frame-Options")
 	resp.Header.Del("Content-Security-Policy")
 
@@ -404,6 +404,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	_, err = w.Write(body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("Write error:", err)
 		return
 	}
 }
