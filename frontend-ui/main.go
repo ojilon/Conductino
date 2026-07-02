@@ -94,6 +94,7 @@ func startIPCServer(cfg *Config){
 	mux.HandleFunc("/api/archive", api.ArchiveHandler)//uses golang.org/x/net/html
 	mux.HandleFunc("/api/pdf", api.PDFHandler) // uses github.com/ledongthuc/pdf
 	mux.HandleFunc("/api/proxy", api.ProxyHandler)
+	mux.HandleFunc("/api/navigate", api.DetectNavigationHandler)
 
 	log.Printf("[Go IPC] listening on %s", cfg.IPC.FrontendListen)
 	if err := http.ListenAndServe(cfg.IPC.FrontendListen, mux); err != nil {

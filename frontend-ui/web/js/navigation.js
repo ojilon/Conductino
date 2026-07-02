@@ -1,47 +1,44 @@
 import { DOM } from "./dom.js";
-import { navigate } from "./webview.js";
 
-/*
-    checking whether the input looks like a web url, eg has a domain suffix
-    like .com or starts with http, if not, redirect it to a search ening like Google.
-    */
-function looksLikeURL(input) {
-    // add protocol if missing so URL() can parse it
-    const withProto = /^https?:\/\//i.test(input) ? input : "https://" + input;
-    try {
-        const u = new URL(withProto);
-        // URL() accepts things like "https://word" (no TLD) so add a
-        // small extra check: hostname must have a dot OR be localhost
-        return u.hostname.includes(".") || u.hostname === "localhost";
-    } catch (_) {
-        return false;
-    }
-}
-
-
-export function initializeNavigation() {
-    DOM.urlForm.addEventListener("submit", function (e) {
+export async function initializeNavigation() {
+    DOM.urlForm.addEventListener("submit", async function (e) {
         e.preventDefault();
         let input = DOM.url.value.trim();
         if(!input) return;
 
-        let displayURL;
-        if (looksLikeURL(input)) {
-            const full = /^https?:\/\//i.test(input) ? input : "https://" + input;
-            displayURL = full;
-            
-            //submit handler
-            navigate(full);
+        try {
+            const response = await fetch("/api/navigate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({input: input})
+            });
 
-        } else {
-            const searchURL = "https://www.google.com/search?q=" + encodeURIComponent(input);
-            displayURL = searchURL;
-            
-            //submit handler
-            navigate(searchURL);
+            //catch HTTP error status codes eg 400
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server responded with status ${response.status}`);
+            }
 
+            const decision = await response.json();
+
+            //check if Go backend sent a successful structurebut with internal error
+            if (decision.error) {
+                throw new Error(decision.error);
+            }
+
+            DOM.url.value = decision.url;
+            DOM.iframe.src = "/api/proxy?url=" + encodeURIComponent(decision.url);
+        }catch (error) {
+            //handle the error visually in the frontend
+            console.error("Navigation error:", error);
+            showErrorToUser(error.message);
         }
-
-        DOM.url.value = displayURL;
     });
+}
+
+//helper function to display the error to the user
+function showErrorToUser(message) {
+    alert("Navigation Failed: " + message);
 }
