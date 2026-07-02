@@ -297,9 +297,6 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("----------------------------------------------")
-	log.Println("\n\nDownloading: ", targetURL)
-
 	//validate URL
 	if _, err := url.ParseRequestURI(targetURL); err != nil {
 		http.Error(w, "invalid URL", http.StatusBadRequest)
@@ -349,6 +346,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
     resp, err := c.Browser.Do(req)
     if err != nil {
     	http.Error(w, err.Error(), http.StatusBadGateway)
+    	return
     }
     defer resp.Body.Close()
 
@@ -359,6 +357,10 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Remove headers that stop embedding in Webview
 	resp.Header.Del("X-Frame-Options")
+	// TODO:
+    // Instead of deleting CSP completely,
+    // rewrite it where possible.
+    // Removing it permanently reduces security.
 	resp.Header.Del("Content-Security-Policy")
 
 
@@ -369,42 +371,63 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//log.Println("\n\n---------------------------------------")
-	//log.Println(string(body))
-	//log.Println("-------------------------------------------")
-	//log.Println("-------------------------------------------")
-
 	//handle rewriting links to the resources of downloaded response
 	contentType := resp.Header.Get("Content-Type")
-	if IsHTML(contentType) {
+	action := DecideResponse(contentType)
+	switch action {
+	case ActionDisplayHTML:
+		baseURL := resp.Request.URL
+		body, err = RewriteHTML(body, baseURL)
+		if err != nil {
+			log.Println(err)
+		}
 
-		baseURL, err := url.Parse(targetURL)
-		if err == nil {
-
-			body, err = RewriteHTML(body, baseURL)
-			if err != nil {
-				log.Println(err)
+		for k, values := range resp.Header {
+			for _, v := range values {
+				w.Header().Add(k, v)
 			}
 		}
-	}
 
-	//log.Println(string(body))
-	//log.Println("-------------------------------------------")
+		w.Header().Set(
+		    "Content-Type",
+		    "text/html; charset=utf-8",
+		)
 
-	// 4. Copy remaining headers
-	for k, values := range resp.Header {
-		for _, v := range values {
-			w.Header().Add(k, v)
+		_, err = w.Write(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println("Write error:", err)
+			return
 		}
-	}
+	case ActionStream:
+		w.Header().Set(
+			"Content-Type",
+			resp.Header.Get("Content-Type"),
+		)
+		_, err = w.Write(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println("Write error:", err)
+			return
+		}
+	case ActionDownload:
+		for k, values := range resp.Header {
+			for _, v := range values {
+				w.Header().Add(k, v)
+			}
+		}
 
-	// Send same status code
-	w.WriteHeader(resp.StatusCode)
-	
-	_, err = w.Write(body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("Write error:", err)
+		w.Header().Set(
+			"Content-Disposition",
+			"attachment",
+		)
+		_,err = w.Write(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println("Write error:", err)
+			return
+		}
+	default:
 		return
 	}
 }
