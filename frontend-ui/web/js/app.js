@@ -11,21 +11,20 @@
 //   the same origin (127.0.0.1:8080). It has NO direct access to SQLite,
 //   the file system, or the Zig process. The Go router is the gatekeeper.
 
-import { DOM } from "./dom";
-import { initializeNavigation } from "./navigation";
+import { DOM } from "./dom.js";
+import { initializeNavigation } from "./navigation.js";
+import { initializeWebView } from "./webview.js";
+import { initializeSelection } from "./selection.js";
+import { getSelection } from "./selection.js";
 
 (function () {
     "use strict";
-
-    let currentSelection = null; //{text, context, rect, coords}
 
     //1.URL bar
     initializeNavigation();
 
 
-    DOM.btnBack.onclick = function () { DOM.iframe.contentWindow.history.back(); };
-    DOM.btnFwd.onclick = function () {history.forward(); };
-    DOM.btnRel.onclick = function () {DOM.iframe.src = DOM.iframe.src; };
+    initializeWebView();
 
     /*2. Selection capture inside iframe
 
@@ -34,68 +33,7 @@ import { initializeNavigation } from "./navigation";
     page fetched and rewritten by /api/archive). For the external pages
     we fall back to listening to the host document's selectionchange.
     */
-
-    function pickUpSelection(doc) {
-        const sel = doc.getSelection();
-        if(!sel || sel.isCollapsed) { hideToolbar(); return;}
-
-        const text = sel.toString().trim();
-        if (text.length < 3) { hideToolbar(); return; }
-
-        const range =sel.getRangeAt(0);
-        const rect  = range.getBoundingClientRect();
-
-        currentSelection = {
-            text: text,
-            context: getContext(range),
-            coords: {
-                start_x: Math.round(rect.left),
-                start_y: Math.round(rect.top),
-                end_x: Math.round(rect.right),
-                end_y: Math.round(rect.bottom)
-            }
-        };
-
-        showToolbar(rect);
-    }
-
-    function getContext(range) {
-        //grab ~120 chars of surrounding text for FTS5 context snippets.
-        try {
-            const container = range.commonAncestorContainer;
-            const text = (container.textContent || "");
-            const idx = text.indexOf(range.length.toString());
-            if (idx < 0) return "";
-            const start = Math.max(0, idx-60);
-            const end =  Math.min(text.length, idx + range.toString().length + 60);
-            return text.slice(start, end).replace(/\s+/g, " ").trim();
-        }catch (_) {return ""; }
-    }
-
-    function showToolbar(rect) {
-        //position the toolbar above the selection (inside the iframe).
-        const paneRect = document.getElementById("webiew-pane").getBoundingClientRect();
-        DOM.toolbar.style.left  = (paneRect.left + rect.left + rect.width / 2) + "px";
-        DOM.toolbar.style.top = (paneRect.top + rect.top - 44) + "px";
-        DOM.toolbar.classList.remove("hidden");
-    }
-    function hideToolbar() {
-        DOM.toolbar.classList.add("hidden");
-        currentSelection = null;
-    }
-
-    //Try to attach to the iframe doc when it loads(same origin only).
-    DOM.iframe.addEventListener("load", function () {
-        //update the url bar when iframe navigates itself
-        try {
-            const loc = DOM.iframe.contentDocument.location.href;
-            if (!loc && loc !== "about:blank") {
-                DOM.url.value = loc;
-            }
-        } catch (_) { /*corss-orogin - ignored */}
-    });
-    //Also listen on the host document (works for archived / local pages).
-    document.addEventListener("selectionchange", function () {pickUpSelection(document); });
+    initializeSelection();
 
     //3. Highlight toolbar buttons -> POST /api/save_notes --------------------------
     Array.prototype.forEach.call(DOM.toolbar.querySelectorAll("button[data-color]"),
@@ -109,6 +47,9 @@ import { initializeNavigation } from "./navigation";
         saveNote("#00add8", note || "");
       });
 
+    const currentSelection = getSelection();
+    if(!currentSelection)
+        return;
     function saveNote(color, extraNote) {
         if(!currentSelection) return;
         const packet = {

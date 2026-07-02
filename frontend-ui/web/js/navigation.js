@@ -1,4 +1,5 @@
-import { DOM } from "./dom";
+import { DOM } from "./dom.js";
+import { navigate } from "./webview.js";
 
 /*
     checking whether the input looks like a web url, eg has a domain suffix
@@ -43,8 +44,4 @@ export function initializeNavigation() {
 
         DOM.url.value = displayURL;
     });
-}
-
-function navigate(url) {
-    DOM.iframe.src = "http://127.0.0.1:8080/api/proxy?url=" + encodeURIComponent(url);
 }
