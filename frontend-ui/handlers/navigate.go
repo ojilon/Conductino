@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -120,6 +121,7 @@ func (c *BackendClient) DetectNavigationHandler(w http.ResponseWriter, r *http.R
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed,)
+		log.Println("Error: POST method required, got: ", r.Method)
 		return
 	}
 
@@ -137,11 +139,12 @@ func (c *BackendClient) DetectNavigationHandler(w http.ResponseWriter, r *http.R
 		Query: decision.Query,
 	}
 
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
-	)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK) //tell js request succeeded
 
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Println("Error encoding json response: ", err)
+		//header already sent, so no use of http.Error here
+	}
 
 }
