@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"strings"
 )
 
@@ -17,6 +18,7 @@ func DecideResponse(contentType string) ResponseAction {
 
 	switch {
 	case strings.Contains(contentType, "text/html"):
+		log.Println("To display html: ", contentType)
 		return ActionDisplayHTML
 	case strings.Contains(contentType, "application/xhtml+xml"):
 		return  ActionDisplayHTML

@@ -17,28 +17,34 @@ export async function initializeNavigation() {
 
             //catch HTTP error status codes eg 400
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Server responded with status ${response.status}`);
+                DOM.iframe.src = "/api/proxy?url=" + encodeURIComponent("error-fallback");
+                return;
             }
 
             const decision = await response.json();
 
             //check if Go backend sent a successful structurebut with internal error
             if (decision.error) {
-                throw new Error(decision.error);
+                DOM.iframe.src = "/api/proxy?url=" + encodeURIComponent("error:"+decision.error);
+                return;
             }
 
             DOM.url.value = decision.url;
             DOM.iframe.src = "/api/proxy?url=" + encodeURIComponent(decision.url);
         }catch (error) {
-            //handle the error visually in the frontend
-            console.error("Navigation error:", error);
-            showErrorToUser(error.message);
+            reportErrorToBackend(error.message);
         }
     });
 }
 
-//helper function to display the error to the user
-function showErrorToUser(message) {
-    alert("Navigation Failed: " + message);
+async function reportErrorToBackend(message) {
+    try {
+        await fetch("/api/log-error", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ error: message})
+        });
+    }catch (e) {
+        DOM.iframe.src = "/api/proxy?url=" + encodeURIComponent("error:"+e);
+    }
 }

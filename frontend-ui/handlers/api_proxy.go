@@ -11,6 +11,7 @@ import (
 func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodGet {
         http.Error(w, "GET required", http.StatusMethodNotAllowed)
+        log.Println("(Proxy api) Needs method, what's got:", r.Method)
         return
     }
 
@@ -20,10 +21,10 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "missing url parameter", http.StatusBadRequest)
         return
     }
-
     //validate URL
     if _, err := url.ParseRequestURI(targetURL); err != nil {
         http.Error(w, "invalid URL", http.StatusBadRequest)
+        log.Println("invalid url:", err)
         return
     }
 
@@ -57,6 +58,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
     )   
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadGateway)
+        log.Println("Badgetway: ", err)
         return
     }
 
@@ -70,6 +72,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
     resp, err := c.Browser.Do(req)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadGateway)
+        log.Println("Failed to get response:", err)
         return
     }
     defer resp.Body.Close()
@@ -108,6 +111,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
         //copy headers, skip the ones that break modified payloads
         for k, values := range resp.Header {
+            log.Println(k)
             if k == "Content-Length" || k == "Content-Encoding" || k == "Content-Type" {
                 continue
             }
@@ -165,7 +169,31 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
             return
         }
     default:
-        http.Error(w, "Unsupported proxy action" , http.StatusBadRequest)
+        // Send a custom HTML error page directly back into the iframe
+        w.Header().Set("Content-Type", "text/html; charset=utf-8")
+        w.WriteHeader(http.StatusBadRequest)
+        
+        errorHTML := `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: -apple-system, sans-serif; padding: 40px; background: #fafafa; color: #333; text-align: center; }
+                .card { max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                h1 { color: #d32f2f; font-size: 24px; margin-bottom: 10px; }
+                p { color: #666; font-size: 16px; line-height: 1.5; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Navigation Error</h1>
+                <p>The proxy could not load this page or the response format is unsupported.</p>
+            </div>
+        </body>
+        </html>`
+        
+        w.Write([]byte(errorHTML))
         return
     }
+
 }

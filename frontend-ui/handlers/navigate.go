@@ -120,7 +120,7 @@ and return
 func (c *BackendClient) DetectNavigationHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed,)
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		log.Println("Error: POST method required, got: ", r.Method)
 		return
 	}
@@ -128,7 +128,8 @@ func (c *BackendClient) DetectNavigationHandler(w http.ResponseWriter, r *http.R
 	var req NavigationRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest,)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Println("Bad request: ", err)
 		return
 	}
 
