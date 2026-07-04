@@ -31,6 +31,10 @@ func DecideResponse(contentType string) ResponseAction {
 	case strings.Contains(contentType, "application/pdf"):
 		return ActionStream
 	default:
+		log.Println("\n\n-----------------------------------")
+		log.Println("Downloading", contentType)
+		log.Println("---------------------------------------s")
+
 		return ActionDownload
 	}
 }

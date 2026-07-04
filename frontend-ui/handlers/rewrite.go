@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"bytes"
-	"log"
+	//"log"
 	"net/url"
 
 	"golang.org/x/net/html"
@@ -85,7 +85,7 @@ func rewriteAttribute(node *html.Node, attrName string, baseURL *url.URL) {
 		//rewrite through the proxy
 		attr.Val = "/api/proxy?url=" + url.QueryEscape(absolute.String())
 
-		log.Println(attrName, "->", absolute.String())
+		//log.Println(attrName, "->", absolute.String())
 
 		return
 	}
