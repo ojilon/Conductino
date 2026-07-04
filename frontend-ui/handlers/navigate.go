@@ -31,6 +31,8 @@ func (k NavigationKind) String() string {
 		return  "website"
 	case NavSearch:
 		return "search"
+	case NavInternal:
+		return "internal"
 	case NavFile:
 		return "file"
 	default:
@@ -40,33 +42,29 @@ func (k NavigationKind) String() string {
 
 type NavigationRequest struct {
 	Input string `json:"input"`
+	Engine string `json:"engine"`//allow user to specify engine
 }
 
 type NavigationResponse struct {
 	Kind string `json:"kind"`
 	URL string `json:"url"`
 	Query string `json:"query,omitempty"`
+	Engines map[string]string `json:"engines,omitempty"`
 }
 
-const DefualtSearchEngine = "https://www.google.com/search?q="
+//map of supported search engines
+var SearchEngines = map[string]string{
+	"google": "https://www.google.com/search?=",
+	"duckduckgo": "https://duckduckgo.com/?q=",
+	"bing": "https://www.bing.com/search?q=",
+}
 
-func DetectNavigation(input string) NavigationDecision {
+func DetectNavigation(input string, selectEngine string) NavigationDecision {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return NavigationDecision{}
 	}
 
-    /*
-    Handle things like
-
-    browser://history
-
-    browser://downloads
-
-    browser://settings
-
-    browser://bookmarks
-    */
 	if strings.HasPrefix(input, "browser://"){
 		return NavigationDecision{
 			Kind: NavInternal,
@@ -76,6 +74,7 @@ func DetectNavigation(input string) NavigationDecision {
 
 	}
 
+	//check if its explicit website navigation
 	candidate := input
 	if !strings.HasPrefix(candidate, "http://") && !strings.HasPrefix(candidate, "https://") {
 		candidate = "https://" + candidate
@@ -83,7 +82,7 @@ func DetectNavigation(input string) NavigationDecision {
 
 	if u, err := url.Parse(candidate); err == nil {
 		host := u.Hostname()
-		if strings.Contains(host, ".") || host == "localhost" {
+		if (strings.Contains(host, ".") && !strings.Contains(input, " ")) || host == "localhost" {
 			return NavigationDecision{
 				Kind: NavWebsite,
 				Input: input,
@@ -92,12 +91,18 @@ func DetectNavigation(input string) NavigationDecision {
 		}
 	}
 
+	//Defualt fallbakc search engine if invalid or unspecified
+	baseURL, exists := SearchEngines[strings.ToLower(selectEngine)]
+	if !exists {
+		baseURL = SearchEngines["duckduckgo"]
+	}
+
     //everything else is a search
 	return NavigationDecision{
 		Kind: NavSearch,
 		Input: input,
 		Query: input,
-		URL: DefualtSearchEngine + url.QueryEscape(input),
+		URL: baseURL + url.QueryEscape(input),
 	}
 }
 
@@ -133,11 +138,16 @@ func (c *BackendClient) DetectNavigationHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	decision := DetectNavigation(req.Input)
+	decision := DetectNavigation(req.Input, req.Engine)
 	resp := NavigationResponse{
 		Kind: decision.Kind.String(),
 		URL: decision.URL,
 		Query: decision.Query,
+		Engines: map[string]string{
+			"Google": SearchEngines["google"] + url.QueryEscape(decision.Query),
+			"DuckDuckGo": SearchEngines["duckduckgo"] + url.QueryEscape(decision.Query),
+			"Bing": SearchEngines["bing"] + url.QueryEscape(decision.Query),
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

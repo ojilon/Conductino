@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 //--------------api/proxy -----------------------
@@ -76,6 +77,17 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
     defer resp.Body.Close()
+
+    //CLOUDFARE AND SECURITY INTERFACES GUARD
+    if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusServiceUnavailable {
+        serverHeader := resp.Header.Get("Server")
+        if strings.Contains(strings.ToLower(serverHeader), "cloudfare") {
+            w.Header().Set("X-Browser-State", "CHALLENGE") //pass a state flage to frontend
+            w.WriteHeader(resp.StatusCode)
+            io.Copy(w, resp.Body) // stream the raw challenge direclty to the user so as to complete it
+            return
+        }
+    }
 
     //response debugging added
     log.Println("Final URL     :", resp.Request.URL.String())
