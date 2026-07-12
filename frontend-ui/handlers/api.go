@@ -19,6 +19,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+    nhelper "Conductino/handlers/navigation_helper"
 )
 
 /*
@@ -56,14 +58,14 @@ type SearchResults struct {
 type BackendClient struct {
 	baseURL string
 	http *http.Client
-	Browser *Browser
+	Browser *nhelper.Browser
 }
 
 func NewBackendClient(baseURL string) *BackendClient {
 	return &BackendClient{
 		baseURL: baseURL,
 		http: &http.Client{Timeout: 5 * time.Second},
-		Browser: NewBrowser(),
+		Browser: nhelper.NewBrowser(),
 	}
 }
 

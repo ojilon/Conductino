@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html><head><style>/* your own CSS, full control */</style></head>
+<body>
+  <h2>Results for {{.Query}}</h2>
+  {{range .Results}}
+    <div class="result">
+      <a href="{{.URL}}">{{.Title}}</a>
+      <p>{{.Snippet}}</p>
+    </div>
+  {{end}}
+</body></html>

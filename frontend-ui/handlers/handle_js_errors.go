@@ -9,7 +9,7 @@ import (
 
 //map the incoming JSON error string from js
 type ErrorLogRequest struct {
-	Error string `json:"errerror"`
+	Error string `json:"error"`
 }
 
 func (c *BackendClient) ErrorLogHandler(w http.ResponseWriter, r *http.Request) {

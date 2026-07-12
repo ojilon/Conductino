@@ -15,6 +15,8 @@ INCLUDE = {
     "rewrite.go",
     "navigation.js",
     "app.js"
+    "Plain_text_hanlder.go"
+    "main.go"
 }
 
 # ==========================================================

@@ -12,9 +12,8 @@ type NavigationKind int
 
 const (
 	NavWebsite NavigationKind = iota
-	NavSearch
-	NavInternal
-	NavFile
+	NavPlainText
+	NavLocal
 )
 
 //for browser returning structured decisions instead of true/false
@@ -28,15 +27,13 @@ type NavigationDecision struct {
 func (k NavigationKind) String() string {
 	switch k {
 	case NavWebsite:
-		return  "website"
-	case NavSearch:
-		return "search"
-	case NavInternal:
-		return "internal"
-	case NavFile:
-		return "file"
+		return  "Website"
+	case NavPlainText:
+		return "PlainText"
+	case NavLocal:
+		return "SearchLocal"
 	default:
-		return "unknown"
+		return "Unknown"
 	}
 } 
 
@@ -55,7 +52,7 @@ type NavigationResponse struct {
 //map of supported search engines
 var SearchEngines = map[string]string{
 	"google": "https://www.google.com/search?=",
-	"duckduckgo": "https://duckduckgo.com/?q=",
+	"duckduckgo": "https://duckduckgo.com/html/?q=",
 	"bing": "https://www.bing.com/search?q=",
 }
 
@@ -65,24 +62,17 @@ func DetectNavigation(input string, selectEngine string) NavigationDecision {
 		return NavigationDecision{}
 	}
 
-	if strings.HasPrefix(input, "browser://"){
-		return NavigationDecision{
-			Kind: NavInternal,
-			Input: input,
-			URL: input,
-		}
-
-	}
-
 	//check if its explicit website navigation
+	//if the input doesn't have the prefix "https://", add it
 	candidate := input
-	if !strings.HasPrefix(candidate, "http://") && !strings.HasPrefix(candidate, "https://") {
+	if !strings.Contains(candidate, "://") {
 		candidate = "https://" + candidate
 	}
 
 	if u, err := url.Parse(candidate); err == nil {
 		host := u.Hostname()
 		if (strings.Contains(host, ".") && !strings.Contains(input, " ")) || host == "localhost" {
+			
 			return NavigationDecision{
 				Kind: NavWebsite,
 				Input: input,
@@ -91,19 +81,22 @@ func DetectNavigation(input string, selectEngine string) NavigationDecision {
 		}
 	}
 
-	//Defualt fallbakc search engine if invalid or unspecified
+	//Defualt fallback search engine if invalid or unspecified
 	baseURL, exists := SearchEngines[strings.ToLower(selectEngine)]
 	if !exists {
 		baseURL = SearchEngines["duckduckgo"]
 	}
 
     //everything else is a search
-	return NavigationDecision{
-		Kind: NavSearch,
+    NavigationDecision_ := NavigationDecision{
+		Kind: NavPlainText,
 		Input: input,
 		Query: input,
 		URL: baseURL + url.QueryEscape(input),
 	}
+
+	log.Println("The item to search is plain words", NavigationDecision_.URL)
+	return NavigationDecision_ 
 }
 
 
@@ -113,6 +106,7 @@ This handler will receive:
 
 {
     "input":"photosynthesis"
+    "engine": "currentEngine"
 }
 
 and return

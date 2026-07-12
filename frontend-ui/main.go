@@ -11,7 +11,7 @@ net/http (stdlib)               →  Runs the local IPC router on :8080
 ARCHITECTURE
   ┌──────────────────────┐   HTTP    ┌──────────────────────┐   C-FFI    ┌─────────┐
   │  WebView2 (web/*)    │ ────────► │  Go IPC Router       │ ─────────► │ Zig +   │
-  │  ── app.js fetch()   │  :8080    │  (this file)         │   :8081    │ SQLite  │
+  │  ── app.js fetch()   │  :8080    │  (bridge.go file)    │   :8081    │ SQLite  │
   └──────────────────────┘  JSON     └──────────────────────┘  JSON      └─────────┘
 
  WHY A LOCAL HTTP API INSTEAD OF webview.Bind()?
@@ -27,51 +27,51 @@ ARCHITECTURE
 package main
 
 import (
-	"Conductino/handlers"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	webview "github.com/webview/webview_go" //native webview2 wrapper
-	"gopkg.in/yaml.v3"                      //yaml config parser
-
+	"Conductino/handlers"
 	"Conductino/pathutil"
+
+	webview "github.com/webview/webview_go" //native webview2 wrapper
+	"gopkg.in/yaml.v3"
 )
 
 //config(mirrors the config.yaml)
 
 type Config struct {
-	Window struct{
-		Title string `yaml:"title" `
-		Width int    `yaml:"width" `
-		Height int   `yaml:"height"`
-		Debug bool    `yaml:"debug"`
-	}`yaml:"window"`
-	IPC struct {
-		FrontendListen string `yaml:"frontend_listen"`
-		BackendURL string `yaml:"backend_url"`
-	}`yaml:"ipc"`
-	Storage struct {
-		DatabasePath string `yaml:"database_path"`
-	}`yaml:"storage"`
-	Archive struct {
-		OutputDir string `yaml:"output_dir"`
-		MaxBytes int `yaml:"max_bytes"`
-	}`yaml:"archive"`
+    Window struct{
+        Title string `yaml:"title" `
+        Width int    `yaml:"width" `
+        Height int   `yaml:"height"`
+        Debug bool    `yaml:"debug"`
+    }`yaml:"window"`
+    IPC struct {
+        FrontendListen string `yaml:"frontend_listen"`
+        BackendURL string `yaml:"backend_url"`
+    }`yaml:"ipc"`
+    Storage struct {
+        DatabasePath string `yaml:"database_path"`
+    }`yaml:"storage"`
+    Archive struct {
+        OutputDir string `yaml:"output_dir"`
+        MaxBytes int `yaml:"max_bytes"`
+    }`yaml:"archive"`
 }
 
 func loadConfig(path string) (*Config, error){
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return  nil, fmt.Errorf("read config: %w", err)
-	}
-	var cfg Config
-	// gopkg.in/yaml.v3 - strict unmarshal of the YAML tree into the struct.
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		return  nil, fmt.Errorf("parser config: %w", err)
-	}
-	return  &cfg, nil
+    raw, err := os.ReadFile(path)
+    if err != nil {
+        return  nil, fmt.Errorf("read config: %w", err)
+    }
+    var cfg Config
+    // gopkg.in/yaml.v3 - strict unmarshal of the YAML tree into the struct.
+    if err := yaml.Unmarshal(raw, &cfg); err != nil {
+        return  nil, fmt.Errorf("parser config: %w", err)
+    }
+    return  &cfg, nil
 }
 
 // IPC Router (Go <-> JS/ Go <-> Zig)
@@ -81,27 +81,30 @@ call via fetch(). Each route is a thin adapter that re-marshals the request
 and forwards it to the Zig backend at cfg.IPC>BackendURL.
 */
 func startIPCServer(cfg *Config){
-	mux := http.NewServeMux()
+    mux := http.NewServeMux()
 
-	//static file server - serves ./web/index.html, style.css, app.js.
-	//WebView2 will navigate to http://127.0.0.1:8080/ui/.
-	mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(http.Dir("./web"))))
+    //static file server - serves ./web/index.html, style.css, app.js.
+    //WebView2 will navigate to http://127.0.0.1:8080/ui/.
+    mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(http.Dir("./web"))))
 
-	//Hand off the JSON API endpoints to the handlers package.
-	api := handlers.NewBackendClient(cfg.IPC.BackendURL)
-	mux.HandleFunc("/api/save_note", api.SaveNoteHandler)
-	mux.HandleFunc("/api/search", api.SearchHandler)
-	mux.HandleFunc("/api/archive", api.ArchiveHandler)//uses golang.org/x/net/html
-	mux.HandleFunc("/api/pdf", api.PDFHandler) // uses github.com/ledongthuc/pdf
-	mux.HandleFunc("/api/proxy", api.ProxyHandler)
-	mux.HandleFunc("/api/navigate", api.DetectNavigationHandler)
-	mux.HandleFunc("/api/log-error", api.ErrorLogHandler)
+    //Hand off the JSON API endpoints to the handlers package.
+    api := handlers.NewBackendClient(cfg.IPC.BackendURL)
+    mux.HandleFunc("/api/save_note", api.SaveNoteHandler)
+    mux.HandleFunc("/api/search", api.SearchHandler)
+    mux.HandleFunc("/api/archive", api.ArchiveHandler)//uses golang.org/x/net/html
+    mux.HandleFunc("/api/pdf", api.PDFHandler) // uses github.com/ledongthuc/pdf
+    mux.HandleFunc("/api/proxy", api.ProxyHandler)
+    mux.HandleFunc("/api/navigate", api.DetectNavigationHandler)
+    mux.HandleFunc("/api/log-error", api.ErrorLogHandler)
+    mux.HandleFunc("/api/plain_text", api.PlainTextOrchestrator)
 
-	log.Printf("[Go IPC] listening on %s", cfg.IPC.FrontendListen)
-	if err := http.ListenAndServe(cfg.IPC.FrontendListen, mux); err != nil {
-		log.Fatalf("IPC server crashed: %v", err)
-	}
+    log.Printf("[Go IPC] listening on %s", cfg.IPC.FrontendListen)
+    if err := http.ListenAndServe(cfg.IPC.FrontendListen, mux); err != nil {
+        log.Fatalf("IPC server crashed: %v", err)
+    }
 }
+
+
 
 // the main ------------------------------------------
 func main() {
@@ -161,55 +164,3 @@ func main() {
 	w.Run()
 }
 
-
-/*
-BROWSER DEVELOPMENT ORDER
-
-Stage 1  ✔
-- Basic navigation
-- URL normalization
-- HTML downloading
-- HTML rewriting
-- Relative URL handling
-
-Stage 2
-- CSS support
-- JavaScript resources
-- Images
-- Fonts
-- Media resources
-- Downloads
-
-Stage 3
-- History
-- Bookmarks
-- Address bar suggestions
-- Download manager
-- Cookies
-- Cache
-
-Stage 4
-- Tabs
-- Tab groups
-- Split views
-- Session restore
-- Reader mode
-
-Stage 5
-- AI integration
-- Notes
-- Highlights
-- Local knowledge base
-- Search indexing
-- PDF annotations
-
-Stage 6
-- Security
-- Sandboxing
-- Extension system
-- Synchronization
-- Performance optimization
-
-The browser should always grow from the networking layer upward.
-Do not add UI features before the underlying browser engine can support them.
-*/

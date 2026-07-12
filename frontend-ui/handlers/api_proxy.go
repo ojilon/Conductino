@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+    nhelper "Conductino/handlers/navigation_helper"
 )
 
 //--------------api/proxy -----------------------
@@ -73,7 +75,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
     resp, err := c.Browser.Do(req)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadGateway)
-        log.Println("Failed to get response:", err)
+        log.Println("Failed to get response, error -> ", err, "\n response gotten -> ", resp)
         return
     }
     defer resp.Body.Close()
@@ -112,11 +114,11 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
     //handle rewriting links to the resources of downloaded response
     contentType := resp.Header.Get("Content-Type")
-    action := DecideResponse(contentType)
+    action := nhelper.DecideResponse(contentType)
     switch action {
-    case ActionDisplayHTML:
+    case nhelper.ActionDisplayHTML:
         baseURL := resp.Request.URL
-        body, err = RewriteHTML(body, baseURL)
+        body, err = nhelper.RewriteHTML(body, baseURL)
         if err != nil {
             log.Println("HTML rewrite error: ",err)
         }
@@ -142,7 +144,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
             log.Println("Write error:", err)
             return
         }
-    case ActionStream:
+    case nhelper.ActionStream:
         //safe copy for non-breaking headers
         for k, values := range resp.Header {
             if k == "Content-Length" {
@@ -161,7 +163,7 @@ func (c *BackendClient) ProxyHandler(w http.ResponseWriter, r *http.Request) {
             log.Println("Write error (Stream):", err)
             return
         }
-    case ActionDownload:
+    case nhelper.ActionDownload:
         for k, values := range resp.Header {
             if k == "Content-Length" || k == "Content-Disposition" {
                 continue

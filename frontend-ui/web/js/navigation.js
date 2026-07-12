@@ -26,11 +26,11 @@ export async function initializeNavigation() {
 
             const decision = await response.json();
 
-            if (decision.kind === "search") {
+            if (decision.kind === "Website") {
                 setState(BrowserState.SEARCH);
 
                 /*isntead of instanlty loading a heavy broken page inside the iframe,
-                build an internal landing page layout insidethe iframe,
+                build an internal landing page layout inside the iframe,
                 or load the direct query with choice.
                 */
                 DOM.url.value = decision.query;
@@ -38,19 +38,12 @@ export async function initializeNavigation() {
                 //Option A: Direct load the safer proxy url
                 DOM.iframe.src = "/api/proxy?url=" + encodeURIComponent(decision.url);
 
-                //or inject custom html elements or render 'templates/search.html' here
-            }else {
-                setState(BrowserState.PAGE);
+            }else if (decision.kind === "PlainText") {
+                //const Plain_text = DOM.url.value; //get the raw text entred by the user
                 DOM.url.value = decision.url;
 
                 //perform proxy fetching
-                const proxyURL = "/api/proxy?url=" + encodeURIComponent(decision.url);
-                const pageResp = await fetch(proxyURL);
-
-                //if backend flagged a cloudflare challenge
-                if (pageResp.headers.get("X-Browser-State") === "CHALLENGE") {
-                    setState(BrowserState.CHALLENGE);
-                }
+                const proxyURL = "/api/plain_text?url=" + encodeURIComponent(decision.url);
 
                 DOM.iframe.src = proxyURL;
             }

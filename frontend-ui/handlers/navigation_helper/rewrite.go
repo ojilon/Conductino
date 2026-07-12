@@ -1,4 +1,4 @@
-package handlers
+package navigation_helper
 
 import (
 	"bytes"
