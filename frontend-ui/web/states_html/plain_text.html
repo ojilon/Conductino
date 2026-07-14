@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html><head><style>/* your own CSS, full control */</style></head>
+<html><head>
+    <link rel="stylesheet" type="text/css" href="../states_css/plain_text.css">
+</head>
 <body>
   <h2>Results for {{.Query}}</h2>
   {{range .Results}}
@@ -8,4 +10,6 @@
       <p>{{.Snippet}}</p>
     </div>
   {{end}}
+
+  <script type="module" src="../js/states_js/plain_text.js"></script>
 </body></html>

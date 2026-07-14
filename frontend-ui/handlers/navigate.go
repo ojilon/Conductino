@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+
 type NavigationKind int
 
 const (
@@ -58,6 +59,7 @@ var SearchEngines = map[string]string{
 
 func DetectNavigation(input string, selectEngine string) NavigationDecision {
 	input = strings.TrimSpace(input)
+
 	if input == "" {
 		return NavigationDecision{}
 	}

@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 
 	nhelper "Conductino/handlers/navigation_helper"
+	thelper "Conductino/handlers/states_helper"
 	"html/template"
 )
 
-// results.html lives at ../web/templates/results.html relative to this file's
-// package (handlers/), i.e. frontend-ui/web/templates/results.html
+// plain_text.html lives at ../web/states_html/plain_text.html relative to this file's
+// package (handlers/), i.e. frontend-ui/web/states_html/plain_text.html
 var resultsTmpl = template.Must(template.ParseFiles(
 	filepath.Join("web", "states_html", "plain_text.html"),
 ))
-
 
 type ResultsPage struct {
 	Query   string
@@ -54,6 +54,7 @@ func (c *BackendClient) PlainTextOrchestrator(w http.ResponseWriter, r *http.Req
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
+    //Here is where the response is downloaded
 	resp, err := c.Browser.Do(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -83,9 +84,13 @@ func (c *BackendClient) PlainTextOrchestrator(w http.ResponseWriter, r *http.Req
 		Results: results,
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := resultsTmpl.Execute(w, page); err != nil {
+	//create the template
+	Created_template := thelper.BundleSourceTemplate("web", "states_html", "plain_text.html")
+
+	err = thelper.Push_html_file(Created_template, page, w)
+	if err != nil {
 		log.Println("template execute error:", err)
+		return
 	}
+
 }
