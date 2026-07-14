@@ -97,6 +97,7 @@ func startIPCServer(cfg *Config){
     mux.HandleFunc("/api/navigate", api.DetectNavigationHandler)
     mux.HandleFunc("/api/log-error", api.ErrorLogHandler)
     mux.HandleFunc("/api/plain_text", api.PlainTextOrchestrator)
+    mux.HandleFunc("/api/plain_text/filter", api.PlainTextFilter)
 
     log.Printf("[Go IPC] listening on %s", cfg.IPC.FrontendListen)
     if err := http.ListenAndServe(cfg.IPC.FrontendListen, mux); err != nil {

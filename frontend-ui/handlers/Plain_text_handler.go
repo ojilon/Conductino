@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
@@ -93,4 +94,48 @@ func (c *BackendClient) PlainTextOrchestrator(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+}
+
+//handle filetering and pagination
+type FilterOptions struct {
+	Query    string
+	Page     int
+	PageSize int
+	SortBy   string // "relevance", "date", etc.
+}
+
+// PlainTextFilter handles filtered search requests
+func (c *BackendClient) PlainTextFilter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse query parameters
+	query := r.URL.Query().Get("q")
+	page := r.URL.Query().Get("page")
+	sortBy := r.URL.Query().Get("sort")
+
+	// Validate
+	if query == "" {
+		http.Error(w, "query parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Return filtered results as JSON
+	// (You can later enhance this to actually filter)
+	results := FilterSearchResults(query, page, sortBy)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+func FilterSearchResults(query, page, sortBy string) interface{} {
+	// Implement filtering logic here
+	return map[string]interface{}{
+		"query":   query,
+		"page":    page,
+		"sortBy":  sortBy,
+		"results": []interface{}{},
+	}
 }
