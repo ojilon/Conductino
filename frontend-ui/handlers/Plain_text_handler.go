@@ -130,12 +130,12 @@ func (c *BackendClient) PlainTextFilter(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(results)
 }
 
-func FilterSearchResults(query, page, sortBy string) interface{} {
+func FilterSearchResults(query, page, sortBy string) any {
 	// Implement filtering logic here
-	return map[string]interface{}{
+	return map[string]any{
 		"query":   query,
 		"page":    page,
 		"sortBy":  sortBy,
-		"results": []interface{}{},
+		"results": []any{},
 	}
 }
