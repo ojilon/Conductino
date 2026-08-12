@@ -41,3 +41,5 @@ guides/
 .clangd
 frontend_combined.txt
 targeted_frontend_files.txt
+
+backend/build/
