@@ -9,10 +9,6 @@ import (
 
 // DualHost keeps chrome on the primary webview (local shell only) and
 // routes remote pages to a separate ContentWebView surface.
-//
-// On Windows, ContentWebView is a second WebView2 with top padding so the
-// chrome band stays visible. On other OSes Embed fails and remote falls
-// back to single-surface behaviour with a log warning.
 type DualHost struct {
 	mu        sync.Mutex
 	chromeURL string
@@ -33,17 +29,17 @@ func (h *DualHost) SetChromeWebView(w webview.WebView) {
 	h.chrome.SetWebView(w)
 }
 
-// AttachContent embeds the content WebView2 on the main window HWND.
-// Call after the chrome webview window exists (Window() != nil).
+// AttachContent embeds the content WebView2 and locks the chrome surface.
 func (h *DualHost) AttachContent(parentHWND uintptr, dataDir string) bool {
 	ok := h.content.Embed(parentHWND, dataDir)
 	h.mu.Lock()
 	h.dualOK = ok
 	h.mu.Unlock()
 	if ok {
-		log.Printf("[shell] dual surface active — chrome permanent, content separate")
+		h.chrome.LockChrome()
+		log.Printf("[shell] dual surface active — chrome permanent at %s", h.chromeURL)
 	} else {
-		log.Printf("[shell] dual surface unavailable — falling back to single-surface warnings")
+		log.Printf("[shell] dual surface unavailable — single-surface fallback")
 	}
 	return ok
 }
@@ -63,30 +59,51 @@ func (h *DualHost) Content() ContentSurface {
 	return h.chrome
 }
 
+// ShowLocalContent hides the remote content surface and shows a chrome panel.
+// Never reloads the chrome document when dual is active.
 func (h *DualHost) ShowLocalContent(path string) {
-	log.Printf("[shell] local content %s", path)
+	log.Printf("[shell] local content %s (dual=%v)", path, h.DualActive())
 	if h.DualActive() {
 		h.content.Hide()
+		// Drive panel visibility inside the already-loaded chrome document.
+		switch := path
+		if panel == "" {
+			panel = "welcome"
+		}
+		js := `(function(){ if (window.ConductinoChrome && window.ConductinoChrome.showWelcome) {` +
+			` window.ConductinoChrome.showWelcome(); } ` +
+			`var w=document.getElementById('welcome'); if(w){ w.classList.add('active'); w.removeAttribute('hidden'); }` +
+			`})()`
+		if panel == "settings" {
+			js = `(function(){ var s=document.getElementById('settings-panel');` +
+				`['welcome','settings-panel','stub-panel'].forEach(function(id){` +
+				`var n=document.getElementById(id); if(!n)return;` +
+				`var on=id==='settings-panel'; n.classList.toggle('active',on);` +
+				`if(on)n.removeAttribute('hidden'); else n.setAttribute('hidden','');});})()`
+		}
+		h.chrome.Eval(js)
+		return
 	}
-	// Chrome document already has welcome/settings panels.
 	h.chrome.LoadChrome(h.chromeURL)
 }
 
+// ShowRemoteContent navigates only the content surface when dual is active.
 func (h *DualHost) ShowRemoteContent(url string) {
 	if url == "" {
-		h.ShowLocalContent("")
+		h.ShowLocalContent("welcome")
 		return
 	}
 	if h.DualActive() {
-		// Critical: do NOT navigate the chrome webview.
+		log.Printf("[shell] remote → content surface only: %s", url)
 		h.content.Navigate(url)
 		return
 	}
-	log.Printf("[shell] dual inactive — remote will replace chrome (legacy)")
+	log.Printf("[shell] dual inactive — remote falls back to single surface")
 	h.chrome.ShowRemoteContent(url)
 }
 
 func (h *DualHost) LoadChrome() {
+	// Initial load only; no-op when locked.
 	h.chrome.LoadChrome(h.chromeURL)
 }
 

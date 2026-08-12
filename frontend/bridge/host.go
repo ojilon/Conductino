@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"unsafe"
 
 	"frontend/shell"
 
 	webview "github.com/webview/webview_go"
 )
 
-// Host owns tabs and a DualHost shell (chrome + content surfaces).
+// Host owns tabs and DualHost (chrome locked + content surface).
 type Host struct {
 	mu        sync.Mutex
 	w         webview.WebView
@@ -36,8 +35,6 @@ func (h *Host) SetWebView(w webview.WebView) {
 	h.shell.SetChromeWebView(w)
 }
 
-// AttachContentSurface embeds the Windows content WebView2 on the main HWND.
-// No-op / false on unsupported platforms.
 func (h *Host) AttachContentSurface(dataDir string) bool {
 	h.mu.Lock()
 	w := h.w
@@ -74,15 +71,12 @@ func (h *Host) PushTabsToChrome() {
 	h.shell.EvalChrome(js)
 }
 
+// showChrome = empty / local tab: hide content surface, keep chrome document.
 func (h *Host) showChrome() {
-	if h.shell.DualActive() {
-		// Hide remote content; chrome document stays loaded.
-		h.shell.ShowLocalContent("welcome")
-		return
-	}
-	h.shell.LoadChrome()
+	h.shell.ShowLocalContent("welcome")
 }
 
+// showContent = omnibox / tab with URL: content surface only.
 func (h *Host) showContent(url string) {
 	h.shell.ShowRemoteContent(url)
 }
@@ -90,21 +84,16 @@ func (h *Host) showContent(url string) {
 func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostPing", func() string {
 		if h.shell.DualActive() {
-			return "pong dual-surface"
+			return "pong dual-surface locked-chrome"
 		}
 		return "pong single-surface"
 	})
 
-	w.Bind("hostMinimize", func() {
-		log.Printf("[host] minimize requested")
-	})
-	w.Bind("hostMaximize", func() {
-		log.Printf("[host] maximize/restore requested")
-	})
-	w.Bind("hostClose", func() {
-		h.destroy()
-	})
+	w.Bind("hostMinimize", func() { log.Printf("[host] minimize requested") })
+	w.Bind("hostMaximize", func() { log.Printf("[host] maximize/restore requested") })
+	w.Bind("hostClose", func() { h.destroy() })
 
+	// Tabs — never Navigate the chrome document when dual is active.
 	w.Bind("hostTabNew", func() int {
 		id := h.tabs.NewTab("New Tab", "")
 		log.Printf("[host] tab new → %d", id)
@@ -144,6 +133,7 @@ func (h *Host) Bind(w webview.WebView) {
 		return string(b)
 	})
 
+	// Omnibox / explicit navigate → content only.
 	w.Bind("hostNavigate", func(url string) {
 		if url == "" {
 			return
@@ -180,7 +170,7 @@ func (h *Host) Bind(w webview.WebView) {
 			h.showChrome()
 			return
 		}
-		log.Printf("[host] reload → %s", url)
+		log.Printf("[host] reload content → %s", url)
 		h.shell.ReloadContent()
 	})
 
@@ -188,7 +178,4 @@ func (h *Host) Bind(w webview.WebView) {
 		h.showChrome()
 		h.PushTabsToChrome()
 	})
-
-	// Silence unused import on non-cgo toolchains that still typecheck unsafe.
-	_ = unsafe.Sizeof(0)
 }
