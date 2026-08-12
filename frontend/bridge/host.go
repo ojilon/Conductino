@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 
 	"frontend/shell"
 
 	webview "github.com/webview/webview_go"
 )
 
-// Host owns the tab model and delegates surfaces to shell.Host.
-// Until dual-WebView exists, shell.SingleSurfaceHost is used — remote
+// Host owns the tab model and delegates surfaces to shell.
+// Until dual-WebView exists, SingleSurfaceHost is used — remote
 // Navigate still replaces chrome (docs/SHELL.md).
 type Host struct {
+	mu        sync.Mutex
+	w         webview.WebView
 	tabs      *TabManager
 	chromeURL string
 	shell     *shell.SingleSurfaceHost
@@ -28,7 +31,20 @@ func NewHost(chromeURL string) *Host {
 }
 
 func (h *Host) SetWebView(w webview.WebView) {
+	h.mu.Lock()
+	h.w = w
+	h.mu.Unlock()
 	h.shell.SetWebView(w)
+}
+
+func (h *Host) destroy() {
+	h.mu.Lock()
+	w := h.w
+	h.mu.Unlock()
+	if w == nil {
+		return
+	}
+	w.Dispatch(func() { w.Destroy() })
 }
 
 func (h *Host) PushTabsToChrome() {
@@ -54,7 +70,6 @@ func (h *Host) showContent(url string) {
 	h.shell.ShowRemoteContent(url)
 }
 
-// Bind registers chrome-facing Go functions.
 func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostPing", func() string { return "pong from Go host" })
 
@@ -65,12 +80,9 @@ func (h *Host) Bind(w webview.WebView) {
 		log.Printf("[host] maximize/restore requested")
 	})
 	w.Bind("hostClose", func() {
-		h.shell.Eval("") // keep API; destroy via webview
-		// Destroy is still on the underlying webview from main.
-		log.Printf("[host] close — process exit via webview.Destroy from main deferred")
+		h.destroy()
 	})
 
-	// Tabs: empty tab stays on chrome; tab with URL drives content surface.
 	w.Bind("hostTabNew", func() int {
 		id := h.tabs.NewTab("New Tab", "")
 		log.Printf("[host] tab new → %d", id)
@@ -117,7 +129,6 @@ func (h *Host) Bind(w webview.WebView) {
 		log.Printf("[host] native navigate → %s", url)
 		h.tabs.Navigate(url)
 		h.PushTabsToChrome()
-		// Content surface only — on single-surface this still replaces chrome.
 		h.showContent(url)
 	})
 
