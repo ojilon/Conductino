@@ -3,21 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Conductino</title>
+  <title>Conductino Study Browser</title>
   <link rel="stylesheet" href="css/base.css" />
 </head>
 <body>
-  <header id="titlebar">
-    <div class="titlebar-drag">
-      <span class="app-mark" aria-hidden="true">◆</span>
-      <span class="app-name">Conductino</span>
-    </div>
-    <div class="window-controls" role="group" aria-label="Window controls">
-      <button type="button" id="btn-min" class="win-btn" title="Minimize" aria-label="Minimize">─</button>
-      <button type="button" id="btn-max" class="win-btn" title="Maximize" aria-label="Maximize">□</button>
-      <button type="button" id="btn-close" class="win-btn win-close" title="Close" aria-label="Close">×</button>
-    </div>
-  </header>
+  <!-- OS title bar carries the app name; no custom titlebar / win controls. -->
 
   <div id="tabstrip" role="tablist" aria-label="Tabs">
     <div id="tabs" class="tabs"></div>
@@ -62,17 +52,13 @@
       <div id="sidebar-panel" class="sidebar-panel" hidden></div>
     </aside>
 
+    <!-- Local-only panels. Remote pages paint in the native content WebView2 above this region. -->
     <main id="content-host" class="content-host" role="main">
       <section id="welcome" class="state-panel active">
         <div class="welcome-card">
-          <h1>Conductino</h1>
-          <p class="muted">Study browser · restructure foundation</p>
-          <p>Type a URL or search query in the omnibox. Navigation is handled by the native webview via the Go bridge.</p>
-          <ul class="welcome-hints">
-            <li>Tabs are owned by Go (<code>bridge.TabManager</code>).</li>
-            <li>Remote pages load with <code>hostNavigate</code> → <code>webview.Navigate</code>.</li>
-            <li>Open the sidebar for Settings (theme + search engine).</li>
-          </ul>
+          <h1>New Tab</h1>
+          <p class="muted">Search or type a URL in the address bar.</p>
+          <p class="muted small">Remote pages load in the native content surface under this chrome.</p>
         </div>
       </section>
 
@@ -95,7 +81,6 @@
               <option value="startpage">Startpage</option>
             </select>
           </label>
-          <p class="muted small">Preferences are stored in the browser for now. Persistent storage will move to the C++ backend later.</p>
           <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
         </div>
       </section>
@@ -103,7 +88,7 @@
       <section id="stub-panel" class="state-panel" hidden>
         <div class="welcome-card">
           <h2 id="stub-title">Coming soon</h2>
-          <p class="muted" id="stub-body">This section is a placeholder. See docs/GUI.md for how to implement it.</p>
+          <p class="muted" id="stub-body">Placeholder. See docs/GUI.md.</p>
           <button type="button" id="btn-stub-back" class="primary-btn">Back</button>
         </div>
       </section>
