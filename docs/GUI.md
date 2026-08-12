@@ -1,141 +1,137 @@
 # Conductino Desktop — GUI Skeleton & Extension Guide
 
-This document describes the **Chrome-like UI** we are building and how to extend it.
+This document describes the **Chrome-like UI** and how to extend it.
 
 The chrome (tabs, toolbar, sidebar, window controls) is pure HTML/CSS/JS.  
-The **content area is the native webview** — never an iframe that loads remote sites.
+Remote pages are loaded by the **native webview** (`webview.Navigate`) — not by feeding HTML into an iframe.
 
 ---
 
-## Target layout (visual)
+## Current skeleton (restructure Step 2)
 
-```
-┌───────────────────────────────────────────────────────────────────────┐
-│  [tabs strip]                                    [ –  □  × ]  │  ← window controls
-├───────────────────────────────────────────────────────────────────────┤
-│  ◀  ▶  ↻  |  🔒  https://…                    |  ☰  │  ← toolbar + URL bar
-├───────────────────────────────────────────────────────────────────────┤
-│  Sidebar (optional)  │                                     │
-│  · Settings          │   NATIVE WEBVIEW                    │
-│  · Downloads (stub)  │   (content surface)                 │
-│  · Bookmarks (stub)  │                                     │
-│  · …                 │                                     │
-└───────────────────────────────────────────────────────────────────────┘
-```
+Implemented in `frontend/web/` + `frontend/main.go`:
 
-### Elements we will implement in the skeleton
-
-| Element | Responsibility | Notes |
-|---------|----------------|-------|
-| **Window controls** | Minimize / Maximize (or restore) / Close | Top-right. On platforms where the OS draws them we may hide our own. |
-| **Tab strip** | Multiple tabs, new tab, close tab, switch | Basic model first; persistence later. |
-| **Toolbar** | Back, Forward, Refresh | Drive the **native** webview navigation. |
-| **URL / omnibox** | Type URL or search query | Search engines come from settings. |
-| **Sidebar** | Settings (implemented), Downloads / Bookmarks (stubs) | Collapsible. |
-| **Content area** | Native webview | The only place remote pages appear. |
-| **Theme** | Dark / Light | CSS variables + settings. |
-
-Undone pieces will have short TODOs and a pointer to this file or a feature README.
+| Element | Status |
+|---------|--------|
+| Title bar + window controls (min / max / close) | UI + Go binds (`hostMinimize`, `hostMaximize`, `hostClose`) |
+| Tab strip (new / close / switch) | JS model live |
+| Toolbar (back / forward / reload) | UI + Go binds |
+| Omnibox (URL or search) | Live; search engines from settings |
+| Sidebar (Settings + Downloads/Bookmarks stubs) | Live |
+| Themes (Aurora Dark / Light) | Live (`data-theme`) |
+| Multi search engines | Live (DuckDuckGo, Google, Bing, Startpage) |
+| Local state panels (welcome, settings, stub) | Live in `#content-host` |
 
 ---
 
-## File map (planned)
+## Target visual layout
 
 ```
-frontend/web/
-├── index.html          # shell: tabs + toolbar + sidebar + content host
-├── css/
-│   ├── base.css
-│   ├── toolbar.css
-│   ├── tabs.css
-│   ├── sidebar.css
-│   ├── themes.css       # dark / light tokens
-│   └── …
-├── js/
-│   ├── bridge.js        # talk to Go (and later C++)
-│   ├── tabs.js
-│   ├── navigation.js    # back / forward / reload / loadURL
-│   ├── sidebar.js
-│   ├── settings.js
-│   ├── state.js
-│   └── app.js           # bootstrap
-└── states/              # local pages (not remote)
-    ├── loading/
-    ├── error/
-    ├── plain_text/
-    ├── search/
-    └── …
+┌──────────────────────────────────────────────────────────────┐
+│  ◆ Conductino                         [ ─  □  × ]           │  ← title bar
+├──────────────────────────────────────────────────────────────┤
+│  [Tab] [Tab] [+]                                             │  ← tab strip
+├──────────────────────────────────────────────────────────────┤
+│  ◀  ▶  ⟳  |  🔒  https://…                         |  ☰    │  ← toolbar
+├──────────────┬───────────────────────────────────────────────┤
+│  Sidebar     │   Content host / native webview surface       │
+│  · Settings  │                                               │
+│  · Downloads │                                               │
+│  · Bookmarks │                                               │
+└──────────────┴───────────────────────────────────────────────┘
 ```
 
-Exact names may shift slightly while we implement; keep this doc in sync.
+---
+
+## Content surface (important)
+
+### Rule
+Remote pages must be loaded **natively** by the webview (same as Android WebView).  
+Do **not** reintroduce a Go HTTP client that fetches a page and injects it into an iframe.
+
+### What webview_go gives us today
+One native webview = one window surface. When the chrome calls `hostNavigate(url)`, Go runs `webview.Navigate(url)`. That is correct and native — the browser identity, cookies, Cloudflare challenges, etc. are handled by the platform webview.
+
+**Trade-off:** navigating away replaces the chrome HTML with the remote page.  
+`hostShowChrome` navigates back to the local shell.
+
+### Path forward (not blocking the skeleton)
+To keep chrome always visible *and* a native content surface:
+
+1. **Preferred later:** multi-webview / panel composition (e.g. Wails WebviewPanel, or platform child WebView2 / WKWebView embedded under the chrome region).
+2. **Interim UX:** after a remote load, inject a small floating “← Chrome” control via `Eval` that calls `hostShowChrome`.
+3. **Never:** put remote documents in an `<iframe>` inside `index.html` as the primary content path.
+
+Local states (welcome, settings, error, plain-text, downloads list, …) continue to render inside `#content-host` in the chrome document.
+
+---
+
+## File map
+
+```
+frontend/
+├── main.go              # webview host, binds, static server
+├── config.go
+├── go.mod
+├── pathutil/
+└── web/
+    ├── index.html       # chrome shell
+    ├── css/base.css     # layout + aurora themes
+    └── js/app.js        # tabs, nav, sidebar, settings
+```
 
 ---
 
 ## How to add a new sidebar item
 
-1. Add a button / entry in the sidebar markup (or generate it from a list in JS).
-2. Give it a clear `data-action` or `id`.
-3. In `sidebar.js` (or equivalent) handle the click:
-   - For **Settings** → open the settings panel / state.
-   - For a **stub** (Downloads, Bookmarks, …) → show a placeholder local page or toast "Coming soon".
-4. Document the new item in this file or in a short `frontend/web/README.md`.
-
-Only Settings needs to be fully functional in the first pass; one or two other entries can be stubs so the shape is visible.
+1. Add a button in `#sidebar .sidebar-nav` with `data-action="your-id"`.
+2. Handle it in `app.js` (sidebar click handler).
+3. Either open a local state panel under `#content-host` or call a Go binding.
+4. For stubs, reuse `#stub-panel` via `showStub(title, body)`.
+5. Document the item here or in a short README next to the feature.
 
 ---
 
 ## How to add a new local state page
 
-Local states are for things that are **not** remote websites (error screens, plain-text viewer, search UI, downloads list, etc.).
-
-1. Create `frontend/web/states/<name>/` with `index.html` (+ optional `style.css` / `logic.js`).
-2. Register the state name in the Go host or in the JS state machine so it can be loaded into the content area (or a dedicated panel) when needed.
-3. Add a one-paragraph README inside the state folder describing when it is shown and what data it expects.
-4. Never use these folders for ordinary remote pages — those go through the native webview.
+1. Add a `<section id="…" class="state-panel">` in `index.html` (or a folder under `web/states/` later).
+2. Show/hide it from `showPanel` in `app.js`.
+3. Keep remote pages out of these panels — they go through `hostNavigate`.
 
 ---
 
-## Navigation rules (important)
+## Navigation rules
 
-- **Back / Forward / Refresh** must call the native webview APIs (via the Go bridge), not manipulate an iframe.
-- **URL bar submit**:
-  - If the input looks like a URL → `webview.Navigate(url)` (or equivalent).
-  - If it looks like a search query → build a search URL from the **currently selected search engine** and navigate.
-- Do **not** re-introduce a Go HTTP client that fetches the page and writes HTML into the DOM.
+- **Omnibox submit**
+  - Looks like URL → normalize and `hostNavigate(url)`.
+  - Otherwise → build search URL from the selected engine and navigate.
+- **Back / Forward / Reload** → `hostGoBack` / `hostGoForward` / `hostReload` (currently `history.*` / `location.reload` via Eval on the active surface).
+- Do not add a Go-side page proxy.
 
 ---
 
-## Themes
+## Themes & search engines
 
-- CSS custom properties for colors, radii, fonts.
-- Two built-in themes: `dark` and `light` (names can be `aurora-dark` / `aurora-light` to stay close to Android).
-- Preference stored in settings; applied by setting `data-theme` on `<html>` or a root class.
-- Full token list will live in `docs/THEMES.md` once the CSS is written.
+- Theme: `data-theme="aurora-dark" | "aurora-light"` on `<html>`, toggled from Settings.
+- Search engines: defined in `app.js` (`ENGINES`). Preference in `localStorage` for now; will move to backend settings later.
+- Full token table will live in `docs/THEMES.md` when polished.
 
 ---
 
 ## Window controls
 
-- Implement minimize / maximize-or-restore / close in the top-right of the chrome.
-- On Windows with WebView2 these can map to the host window methods exposed by `webview_go`.
-- On other platforms follow the same visual language; hide or adapt if the OS already draws the buttons.
+Bound as `hostMinimize`, `hostMaximize`, `hostClose`.  
+Close is implemented; min/max log for now and can be wired via the native window handle from `webview.Window()` per platform.
 
 ---
 
 ## What is deliberately left for later
 
-- Full tab persistence across restarts
-- Drag-and-drop tab reordering
-- Find-in-page chrome
-- Reader mode / advanced content extraction UI
-- Full downloads manager UI
-- Bookmarks manager UI
+- Always-visible chrome + native content (multi-webview / panel)
+- Tab persistence across restarts
+- Real back/forward history flags from the webview
+- Downloads / bookmarks implementations
+- Find-in-page, reader mode
+- C++ backend settings storage
 
-Each of the above should get a short section or a feature README when work starts on it.
-
----
-
-## Relation to the old `frontend-ui`
-
-The old tree used an iframe (`#webview`) and a lot of Go-side request handling.  
-That approach is **retired**. Useful non-network pieces (plain-text viewer, notes, local styling ideas) will be migrated carefully; the network path will not.
+Each should get a short note here or a feature README when work starts.
