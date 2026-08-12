@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="aurora-dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conductino</title>
+  <link rel="stylesheet" href="css/base.css" />
+</head>
+<body>
+  <!-- Title bar: drag region + window controls -->
+  <header id="titlebar">
+    <div class="titlebar-drag">
+      <span class="app-mark" aria-hidden="true">◆</span>
+      <span class="app-name">Conductino</span>
+    </div>
+    <div class="window-controls" role="group" aria-label="Window controls">
+      <button type="button" id="btn-min" class="win-btn" title="Minimize" aria-label="Minimize">─</button>
+      <button type="button" id="btn-max" class="win-btn" title="Maximize" aria-label="Maximize">□</button>
+      <button type="button" id="btn-close" class="win-btn win-close" title="Close" aria-label="Close">×</button>
+    </div>
+  </header>
+
+  <!-- Tab strip -->
+  <div id="tabstrip" role="tablist" aria-label="Tabs">
+    <div id="tabs" class="tabs"></div>
+    <button type="button" id="btn-new-tab" class="tab-new" title="New tab" aria-label="New tab">+</button>
+  </div>
+
+  <!-- Toolbar: nav + omnibox -->
+  <div id="toolbar">
+    <div class="nav-group">
+      <button type="button" id="btn-back" class="tool-btn" title="Back" aria-label="Back" disabled>◀</button>
+      <button type="button" id="btn-fwd" class="tool-btn" title="Forward" aria-label="Forward" disabled>▶</button>
+      <button type="button" id="btn-reload" class="tool-btn" title="Reload" aria-label="Reload">⟳</button>
+    </div>
+
+    <form id="omnibox-form" class="omnibox" autocomplete="off">
+      <span class="omnibox-icon" id="omnibox-icon" title="Scheme">🔒</span>
+      <input
+        id="omnibox"
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder="Search or enter address"
+        aria-label="Address and search"
+      />
+    </form>
+
+    <div class="tool-end">
+      <button type="button" id="btn-sidebar" class="tool-btn" title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed="false">☰</button>
+    </div>
+  </div>
+
+  <!-- Workspace: optional sidebar + content host -->
+  <div id="workspace">
+    <aside id="sidebar" class="sidebar" hidden aria-label="Sidebar">
+      <div class="sidebar-header">
+        <h2>Menu</h2>
+        <button type="button" id="btn-sidebar-close" class="tool-btn" title="Close sidebar" aria-label="Close sidebar">×</button>
+      </div>
+      <nav class="sidebar-nav">
+        <button type="button" class="sidebar-item" data-action="settings">⚙ Settings</button>
+        <button type="button" class="sidebar-item" data-action="downloads">⬇ Downloads <span class="stub">soon</span></button>
+        <button type="button" class="sidebar-item" data-action="bookmarks">☆ Bookmarks <span class="stub">soon</span></button>
+      </nav>
+      <div id="sidebar-panel" class="sidebar-panel" hidden></div>
+    </aside>
+
+    <!--
+      Content host
+      ------------
+      Local states (welcome, settings, error, plain-text, …) render here.
+      Remote pages are loaded by the *native* webview (Go → webview.Navigate).
+      See docs/GUI.md § Content surface.
+    -->
+    <main id="content-host" class="content-host" role="main">
+      <section id="welcome" class="state-panel active">
+        <div class="welcome-card">
+          <h1>Conductino</h1>
+          <p class="muted">Study browser · restructure foundation</p>
+          <p>Type a URL or search query in the omnibox. Navigation is handled by the native webview.</p>
+          <ul class="welcome-hints">
+            <li>Tabs, toolbar, sidebar, and themes are live in this chrome.</li>
+            <li>Remote pages load natively (not via iframe).</li>
+            <li>Open the sidebar for Settings (theme + search engine).</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="settings-panel" class="state-panel" hidden>
+        <div class="settings-card">
+          <h2>Settings</h2>
+
+          <label class="field">
+            <span>Theme</span>
+            <select id="setting-theme">
+              <option value="aurora-dark">Aurora Dark</option>
+              <option value="aurora-light">Aurora Light</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Search engine</span>
+            <select id="setting-engine">
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+              <option value="startpage">Startpage</option>
+            </select>
+          </label>
+
+          <p class="muted small">Preferences are stored in the browser for now. Persistent storage will move to the C++ backend later.</p>
+          <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
+        </div>
+      </section>
+
+      <section id="stub-panel" class="state-panel" hidden>
+        <div class="welcome-card">
+          <h2 id="stub-title">Coming soon</h2>
+          <p class="muted" id="stub-body">This section is a placeholder. See docs/GUI.md for how to implement it.</p>
+          <button type="button" id="btn-stub-back" class="primary-btn">Back</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

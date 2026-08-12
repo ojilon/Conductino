@@ -2,65 +2,186 @@ package main
 
 import (
 	"fmt"
-	"frontend/pathutil"
 	"log"
+	"net/http"
 	"os"
+	"path/filepath"
+	"sync"
 
-	webview "github.com/webview/webview_go" //native webview2 wrapper
+	"frontend/pathutil"
+
+	webview "github.com/webview/webview_go"
 )
 
+// Host holds the webview instance so bound callbacks can control it.
+type Host struct {
+	mu sync.Mutex
+w  webview.WebView
+}
+
+func (h *Host) set(w webview.WebView) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.w = w
+}
+
+func (h *Host) with(fn func(webview.WebView)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.w != nil {
+		fn(h.w)
+	}
+}
+
 func main() {
-		/*
-		os.Getwd() returns wherever the shell is when you run the program, not where main.go lives. So if you cd somewhere else and run the binary, it anchors from there.
-	    For development this is fine — you always run from the project root. If you later package the binary for distribution, switch the anchor to:
-		
-		exe, _ := os.Executable()
-	    anchor := filepath.Dir(exe)
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	    And put config.yaml next to the binary. The FindFile function works the same either way — you just change what you pass in.
-		*/
+	// Prefer running from repo root or from frontend/.
+	cfgPath, err := pathutil.FindFile(cwd, "config.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	cfg, err := loadConfig(cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		cwd, err := os.Getwd()
+	// Resolve web asset directory (frontend/web).
+	webDir := resolveWebDir(cwd)
+	log.Printf("[frontend] serving chrome from %s", webDir)
+
+	go startStaticServer(cfg.IPC.FrontendListen, webDir)
+
+	host := &Host{}
+
+	w := webview.New(cfg.Window.Debug)
+	defer w.Destroy()
+	host.set(w)
+
+	w.SetTitle(cfg.Window.Title)
+	w.SetSize(cfg.Window.Width, cfg.Window.Height, webview.HintNone)
+
+	// Bind chrome → native actions.
+	// Navigation uses the *same* native webview (no iframe for remote pages).
+	bindHost(w, host)
+
+	// Load local chrome shell over loopback HTTP (real origin, not file://).
+	chromeURL := fmt.Sprintf("http://%s/", cfg.IPC.FrontendListen)
+	log.Printf("[frontend] navigating to chrome %s", chromeURL)
+	w.Navigate(chromeURL)
+
+	w.Run()
+}
+
+func bindHost(w webview.WebView, host *Host) {
+	// Diagnostic
+	w.Bind("hostPing", func() string { return "pong from Go host" })
+
+	// Window controls (best-effort; webview_go exposes limited window APIs).
+	w.Bind("hostMinimize", func() {
+		log.Printf("[host] minimize requested (platform support varies)")
+		// TODO: platform-specific minimize via w.Window() handle when needed.
+	})
+	w.Bind("hostMaximize", func() {
+		log.Printf("[host] maximize/restore requested (platform support varies)")
+	})
+	w.Bind("hostClose", func() {
+		host.with(func(wv webview.WebView) {
+			wv.Dispatch(func() {
+				wv.Destroy()
+			})
+		})
+	})
+
+	// Native navigation — this is the content surface.
+	// Note: navigating leaves the chrome HTML; returning to chrome is hostShowChrome.
+	// Multi-webview / panel composition is documented in docs/GUI.md.
+	w.Bind("hostNavigate", func(url string) {
+		log.Printf("[host] native navigate → %s", url)
+		host.with(func(wv webview.WebView) {
+			wv.Dispatch(func() {
+				wv.Navigate(url)
+			})
+		})
+	})
+
+	w.Bind("hostGoBack", func() {
+		log.Printf("[host] goBack (Eval history.back fallback)")
+		host.with(func(wv webview.WebView) {
+			wv.Dispatch(func() {
+				wv.Eval(`history.back()`)
+			})
+		})
+	})
+	w.Bind("hostGoForward", func() {
+		log.Printf("[host] goForward")
+		host.with(func(wv webview.WebView) {
+			wv.Dispatch(func() {
+				wv.Eval(`history.forward()`)
+			})
+		})
+	})
+	w.Bind("hostReload", func() {
+		log.Printf("[host] reload")
+		host.with(func(wv webview.WebView) {
+			wv.Dispatch(func() {
+				wv.Eval(`location.reload()`)
+			})
+		})
+	})
+
+	// Return to chrome shell after a remote navigate.
+	w.Bind("hostShowChrome", func() {
+		cfgPath, err := pathutil.FindFile(mustCwd(), "config.yaml")
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("[host] showChrome: config not found: %v", err)
+			return
 		}
-
-		cfgPath, err := pathutil.FindFile(cwd, "config.yaml")
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		cfg, err := loadConfig(cfgPath)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("[host] showChrome: %v", err)
+			return
 		}
+		url := fmt.Sprintf("http://%s/", cfg.IPC.FrontendListen)
+		host.with(func(wv webview.WebView) {
+			wv.Dispatch(func() {
+				wv.Navigate(url)
+			})
+		})
+	})
+}
 
-		//boot the local APU in a goroutine so the webview2 main thread is free.
-		go StartIPCServer(cfg)
+func startStaticServer(addr, webDir string) {
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	log.Printf("[frontend] static server on http://%s/", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("static server failed: %v", err)
+	}
+}
 
-		/*
-		Initialize WebView2
-		debug=true enables the embedded DevTools.
-		*/
-		w := webview.New(cfg.Window.Debug)
-		defer w.Destroy()
+func resolveWebDir(cwd string) string {
+	candidates := []string{
+		filepath.Join(cwd, "web"),
+		filepath.Join(cwd, "frontend", "web"),
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && st.IsDir() {
+			return c
+		}
+	}
+	// Fallback: relative to this source layout
+	return filepath.Join(cwd, "web")
+}
 
-		w.SetTitle(cfg.Window.Title)
-		w.SetSize(cfg.Window.Width, cfg.Window.Height, webview.HintNone)
-
-		/*
-		SECURITY: navigate to localhost, NOT to file:// URL. Which means
-		the page lives in a real HTTP origin and same-origin policy applies
-		to every fetch() call inside app.js. Local context isolation somewhat archieved.
-		*/
-		w.Navigate(fmt.Sprintf("http://%s/", cfg.IPC.FrontendListen))
-
-		/*
-		w.Bind() is intentionally NOT used for data
-		*/
-		w.Bind("hostPing", func() string { return " pong from Go host"})
-
-		//Blocks until the window is closed
-		w.Run()
+func mustCwd() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return cwd
 }
