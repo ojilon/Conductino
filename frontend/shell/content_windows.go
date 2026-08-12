@@ -46,20 +46,31 @@ func (c *ContentWebView) Embed(parentHWND uintptr, dataDir string) bool {
 	cr := edge.NewChromium()
 	cr.DataPath = dataDir
 	cr.Debug = false
-	cr.SetErrorCallback(func(err error) {
-		// Do not os.Exit — log and keep chrome alive.
-		log.Printf("[content-wv2] %v", err)
-	})
+	// Note: do not call SetErrorCallback — it is absent on some go-webview2
+	// tags (e.g. v1.0.2). Default handler logs; avoid relying on os.Exit paths
+	// by treating Embed failure as dual-surface unavailable.
 
 	log.Printf("[content] embedding WebView2 on HWND=%v data=%s", parentHWND, dataDir)
-	if !cr.Embed(parentHWND) {
+	ok := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[content] Embed panic: %v", r)
+				ok = false
+			}
+		}()
+		ok = cr.Embed(parentHWND)
+	}()
+	if !ok {
 		log.Printf("[content] Embed failed")
 		return false
 	}
 
 	// Reserve top band for chrome HTML (tabs / omnibox).
 	cr.SetPadding(edge.Rect{Top: DefaultChromeTopPx})
-	_ = cr.Hide()
+	if err := cr.Hide(); err != nil {
+		log.Printf("[content] Hide: %v", err)
+	}
 
 	c.mu.Lock()
 	c.chromium = cr
@@ -83,7 +94,9 @@ func (c *ContentWebView) Navigate(url string) {
 	}
 	log.Printf("[content] Navigate → %s", url)
 	cr.Navigate(url)
-	_ = cr.Show()
+	if err := cr.Show(); err != nil {
+		log.Printf("[content] Show: %v", err)
+	}
 	c.mu.Lock()
 	c.hidden = false
 	c.mu.Unlock()
@@ -144,7 +157,6 @@ func (c *ContentWebView) SetBounds(b Bounds) {
 	if !ready || cr == nil {
 		return
 	}
-	// Re-apply top padding; full client resize is handled by Chromium.Resize.
 	if b.Y > 0 {
 		cr.SetPadding(edge.Rect{Top: int32(b.Y)})
 	} else {
