@@ -2,14 +2,13 @@
  * Conductino chrome bootstrap
  * Tabs · navigation · sidebar · settings · window controls
  *
- * Remote navigation is requested via Go bindings (native webview).
- * Local state panels (welcome, settings, stubs) live in #content-host.
- * See docs/GUI.md.
+ * Tab model + navigation are owned by Go (bridge package).
+ * This file renders chrome and forwards user actions via ConductinoBridge.
+ * See docs/BRIDGE.md and docs/GUI.md.
  */
 (function () {
   "use strict";
 
-  // —— Search engines (mirror Android search_engines idea) ——
   var ENGINES = {
     duckduckgo: { name: "DuckDuckGo", url: "https://duckduckgo.com/?q=%s" },
     google: { name: "Google", url: "https://www.google.com/search?q=%s" },
@@ -17,13 +16,10 @@
     startpage: { name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s" },
   };
 
-  // —— State ——
-  var tabs = [];
-  var activeTabId = null;
-  var nextTabId = 1;
+  // Local mirror of Go tab snapshot for rendering.
+  var tabSnap = [];
   var settings = loadSettings();
 
-  // —— DOM ——
   var el = {
     tabs: document.getElementById("tabs"),
     newTab: document.getElementById("btn-new-tab"),
@@ -36,9 +32,6 @@
     sidebar: document.getElementById("sidebar"),
     btnSidebar: document.getElementById("btn-sidebar"),
     btnSidebarClose: document.getElementById("btn-sidebar-close"),
-    welcome: document.getElementById("welcome"),
-    settingsPanel: document.getElementById("settings-panel"),
-    stubPanel: document.getElementById("stub-panel"),
     stubTitle: document.getElementById("stub-title"),
     stubBody: document.getElementById("stub-body"),
     settingTheme: document.getElementById("setting-theme"),
@@ -50,7 +43,10 @@
     btnClose: document.getElementById("btn-close"),
   };
 
-  // —— Settings persistence (local for now) ——
+  function B() {
+    return window.ConductinoBridge || null;
+  }
+
   function loadSettings() {
     try {
       var raw = localStorage.getItem("conductino.settings");
@@ -72,74 +68,26 @@
     saveSettings();
   }
 
-  // —— Tabs ——
-  function createTab(opts) {
-    opts = opts || {};
-    var tab = {
-      id: nextTabId++,
-      title: opts.title || "New Tab",
-      url: opts.url || "",
-      canBack: false,
-      canFwd: false,
-    };
-    tabs.push(tab);
-    renderTabs();
-    activateTab(tab.id);
-    return tab;
-  }
-
-  function activateTab(id) {
-    activeTabId = id;
-    var tab = tabs.find(function (t) {
-      return t.id === id;
-    });
-    if (!tab) return;
-    renderTabs();
-    el.omnibox.value = tab.url || "";
-    updateNavButtons(tab);
-    updateOmniboxIcon(tab.url);
-    if (!tab.url) {
-      showPanel("welcome");
+  function activeFromSnap() {
+    for (var i = 0; i < tabSnap.length; i++) {
+      if (tabSnap[i].active) return tabSnap[i];
     }
-  }
-
-  function closeTab(id) {
-    var idx = tabs.findIndex(function (t) {
-      return t.id === id;
-    });
-    if (idx < 0) return;
-    tabs.splice(idx, 1);
-    if (tabs.length === 0) {
-      createTab();
-      return;
-    }
-    if (activeTabId === id) {
-      var next = tabs[Math.max(0, idx - 1)];
-      activateTab(next.id);
-    } else {
-      renderTabs();
-    }
-  }
-
-  function activeTab() {
-    return tabs.find(function (t) {
-      return t.id === activeTabId;
-    });
+    return tabSnap[0] || null;
   }
 
   function renderTabs() {
     el.tabs.innerHTML = "";
-    tabs.forEach(function (tab) {
+    tabSnap.forEach(function (tab) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "tab" + (tab.id === activeTabId ? " active" : "");
+      btn.className = "tab" + (tab.active ? " active" : "");
       btn.setAttribute("role", "tab");
-      btn.setAttribute("aria-selected", tab.id === activeTabId ? "true" : "false");
+      btn.setAttribute("aria-selected", tab.active ? "true" : "false");
       btn.dataset.tabId = String(tab.id);
 
       var title = document.createElement("span");
       title.className = "tab-title";
-      title.textContent = tab.title;
+      title.textContent = tab.title || "New Tab";
 
       var close = document.createElement("span");
       close.className = "tab-close";
@@ -147,21 +95,76 @@
       close.textContent = "×";
       close.addEventListener("click", function (e) {
         e.stopPropagation();
-        closeTab(tab.id);
+        var b = B();
+        if (b) b.tabClose(tab.id);
+        else closeTabLocal(tab.id);
       });
 
       btn.appendChild(title);
       btn.appendChild(close);
       btn.addEventListener("click", function () {
-        activateTab(tab.id);
+        var b = B();
+        if (b) b.tabActivate(tab.id);
+        else activateLocal(tab.id);
       });
       el.tabs.appendChild(btn);
     });
+
+    var active = activeFromSnap();
+    if (active) {
+      el.omnibox.value = active.url || "";
+      el.back.disabled = !active.canBack;
+      el.fwd.disabled = !active.canFwd;
+      updateOmniboxIcon(active.url);
+      if (!active.url) showPanel("welcome");
+    }
   }
 
-  function updateNavButtons(tab) {
-    el.back.disabled = !tab || !tab.canBack;
-    el.fwd.disabled = !tab || !tab.canFwd;
+  function applyTabSnapshot(list) {
+    if (!Array.isArray(list)) return;
+    tabSnap = list;
+    renderTabs();
+  }
+
+  // Fallback local tabs if Go bindings are not present (browser preview).
+  var localTabs = [];
+  var localActive = null;
+  var localNext = 1;
+
+  function ensureLocalSeed() {
+    if (localTabs.length) return;
+    localTabs = [{ id: 1, title: "New Tab", url: "", canBack: false, canFwd: false, active: true }];
+    localActive = 1;
+    localNext = 2;
+    tabSnap = localTabs.slice();
+  }
+
+  function activateLocal(id) {
+    localTabs.forEach(function (t) {
+      t.active = t.id === id;
+    });
+    localActive = id;
+    tabSnap = localTabs.map(function (t) {
+      return Object.assign({}, t);
+    });
+    renderTabs();
+  }
+
+  function closeTabLocal(id) {
+    localTabs = localTabs.filter(function (t) {
+      return t.id !== id;
+    });
+    if (!localTabs.length) {
+      localTabs = [{ id: localNext++, title: "New Tab", url: "", canBack: false, canFwd: false, active: true }];
+      localActive = localTabs[0].id;
+    } else if (localActive === id) {
+      localTabs[0].active = true;
+      localActive = localTabs[0].id;
+    }
+    tabSnap = localTabs.map(function (t) {
+      return Object.assign({}, t);
+    });
+    renderTabs();
   }
 
   function updateOmniboxIcon(url) {
@@ -169,21 +172,19 @@
       el.omniboxIcon.textContent = "🔍";
       return;
     }
-    if (/^https:\/\//i.test(url)) {
-      el.omniboxIcon.textContent = "🔒";
-    } else if (/^http:\/\//i.test(url)) {
-      el.omniboxIcon.textContent = "⚠";
-    } else {
-      el.omniboxIcon.textContent = "📄";
-    }
+    if (/^https:\/\//i.test(url)) el.omniboxIcon.textContent = "🔒";
+    else if (/^http:\/\//i.test(url)) el.omniboxIcon.textContent = "⚠";
+    else el.omniboxIcon.textContent = "📄";
   }
 
-  // —— Panels (local states) ——
   function showPanel(name) {
     ["welcome", "settings-panel", "stub-panel"].forEach(function (id) {
       var node = document.getElementById(id);
       if (!node) return;
-      var on = id === name || (name === "settings" && id === "settings-panel") || (name === "stub" && id === "stub-panel");
+      var on =
+        id === name ||
+        (name === "settings" && id === "settings-panel") ||
+        (name === "stub" && id === "stub-panel");
       node.classList.toggle("active", on);
       if (on) node.removeAttribute("hidden");
       else node.setAttribute("hidden", "");
@@ -196,11 +197,9 @@
     showPanel("stub");
   }
 
-  // —— Navigation ——
   function looksLikeUrl(input) {
     var s = input.trim();
-    if (!s) return false;
-    if (/\s/.test(s)) return false;
+    if (!s || /\s/.test(s)) return false;
     if (/^(https?:\/\/|about:|file:)/i.test(s)) return true;
     if (/^[a-z0-9.-]+\.[a-z]{2,}([\/:].*)?$/i.test(s)) return true;
     if (/^localhost(:\d+)?([\/:].*)?$/i.test(s)) return true;
@@ -221,27 +220,22 @@
   function navigateTo(input) {
     var raw = (input || "").trim();
     if (!raw) return;
-
     var url = looksLikeUrl(raw) ? normalizeUrl(raw) : buildSearchUrl(raw);
-    var tab = activeTab();
-    if (tab) {
-      tab.url = url;
-      tab.title = url.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
+    var b = B();
+    if (b) {
+      b.navigate(url);
+      return;
+    }
+    // Preview fallback
+    var t = activeFromSnap();
+    if (t) {
+      t.url = url;
+      t.title = url.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
       renderTabs();
-      el.omnibox.value = url;
-      updateOmniboxIcon(url);
     }
-
-    // Native navigation via Go binding when available.
-    if (typeof window.hostNavigate === "function") {
-      window.hostNavigate(url);
-    } else {
-      console.info("[conductino] hostNavigate not bound yet — would navigate to:", url);
-      showStub("Native navigation", "Go binding hostNavigate will load:\n" + url);
-    }
+    showStub("Native navigation", "Would call hostNavigate:\n" + url);
   }
 
-  // —— Sidebar ——
   function setSidebarOpen(open) {
     if (open) {
       el.sidebar.removeAttribute("hidden");
@@ -252,37 +246,37 @@
     }
   }
 
-  function toggleSidebar() {
-    setSidebarOpen(el.sidebar.hasAttribute("hidden"));
-  }
-
-  // —— Host bridge helpers (safe if unbound) ——
-  function hostCall(name) {
-    var fn = window[name];
-    if (typeof fn === "function") {
-      try {
-        return fn();
-      } catch (e) {
-        console.warn(name, e);
-      }
-    } else {
-      console.info("[conductino] binding missing:", name);
-    }
-  }
-
-  // —— Wire events ——
+  // —— Events ——
   el.newTab.addEventListener("click", function () {
-    createTab();
+    var b = B();
+    if (b) b.tabNew();
+    else {
+      ensureLocalSeed();
+      localTabs.forEach(function (t) {
+        t.active = false;
+      });
+      var nt = { id: localNext++, title: "New Tab", url: "", canBack: false, canFwd: false, active: true };
+      localTabs.push(nt);
+      localActive = nt.id;
+      tabSnap = localTabs.map(function (t) {
+        return Object.assign({}, t);
+      });
+      renderTabs();
+      showPanel("welcome");
+    }
   });
 
   el.back.addEventListener("click", function () {
-    hostCall("hostGoBack");
+    var b = B();
+    if (b) b.back();
   });
   el.fwd.addEventListener("click", function () {
-    hostCall("hostGoForward");
+    var b = B();
+    if (b) b.forward();
   });
   el.reload.addEventListener("click", function () {
-    hostCall("hostReload");
+    var b = B();
+    if (b) b.reload();
   });
 
   el.omniboxForm.addEventListener("submit", function (e) {
@@ -290,7 +284,9 @@
     navigateTo(el.omnibox.value);
   });
 
-  el.btnSidebar.addEventListener("click", toggleSidebar);
+  el.btnSidebar.addEventListener("click", function () {
+    setSidebarOpen(el.sidebar.hasAttribute("hidden"));
+  });
   el.btnSidebarClose.addEventListener("click", function () {
     setSidebarOpen(false);
   });
@@ -302,10 +298,10 @@
         showPanel("settings");
         setSidebarOpen(false);
       } else if (action === "downloads") {
-        showStub("Downloads", "Download manager will live here. See docs/GUI.md for how to implement this sidebar item.");
+        showStub("Downloads", "Download manager will live here. See docs/GUI.md.");
         setSidebarOpen(false);
       } else if (action === "bookmarks") {
-        showStub("Bookmarks", "Bookmarks UI will live here. See docs/GUI.md for how to implement this sidebar item.");
+        showStub("Bookmarks", "Bookmarks UI will live here. See docs/GUI.md.");
         setSidebarOpen(false);
       }
     });
@@ -326,38 +322,56 @@
   });
 
   el.btnMin.addEventListener("click", function () {
-    hostCall("hostMinimize");
+    var b = B();
+    if (b) b.minimize();
   });
   el.btnMax.addEventListener("click", function () {
-    hostCall("hostMaximize");
+    var b = B();
+    if (b) b.maximize();
   });
   el.btnClose.addEventListener("click", function () {
-    hostCall("hostClose");
+    var b = B();
+    if (b) b.close();
   });
 
   // —— Boot ——
   applyTheme(settings.theme || "aurora-dark");
   el.settingEngine.value = settings.engine || "duckduckgo";
-  createTab({ title: "New Tab" });
 
-  // Expose a tiny API for Go → JS updates later (title, canBack, etc.)
   window.ConductinoChrome = {
+    applyTabSnapshot: applyTabSnapshot,
     setTabMeta: function (meta) {
-      var tab = activeTab();
-      if (!tab || !meta) return;
-      if (meta.title) tab.title = meta.title;
-      if (typeof meta.url === "string") tab.url = meta.url;
-      if (typeof meta.canBack === "boolean") tab.canBack = meta.canBack;
-      if (typeof meta.canFwd === "boolean") tab.canFwd = meta.canFwd;
+      var active = activeFromSnap();
+      if (!active || !meta) return;
+      if (meta.title) active.title = meta.title;
+      if (typeof meta.url === "string") active.url = meta.url;
+      if (typeof meta.canBack === "boolean") active.canBack = meta.canBack;
+      if (typeof meta.canFwd === "boolean") active.canFwd = meta.canFwd;
       renderTabs();
-      updateNavButtons(tab);
-      if (typeof meta.url === "string") {
-        el.omnibox.value = meta.url;
-        updateOmniboxIcon(meta.url);
-      }
     },
     showWelcome: function () {
       showPanel("welcome");
     },
   };
+
+  // Pull initial tab list from Go when available.
+  function syncFromHost() {
+    var b = B();
+    if (!b) {
+      ensureLocalSeed();
+      renderTabs();
+      return;
+    }
+    var list = b.tabList();
+    if (list && list.length) applyTabSnapshot(list);
+    else {
+      ensureLocalSeed();
+      renderTabs();
+    }
+  }
+
+  // bridge.js may load before or after; retry briefly.
+  syncFromHost();
+  setTimeout(syncFromHost, 50);
+  setTimeout(syncFromHost, 200);
 })();

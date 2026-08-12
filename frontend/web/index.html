@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="css/base.css" />
 </head>
 <body>
-  <!-- Title bar: drag region + window controls -->
   <header id="titlebar">
     <div class="titlebar-drag">
       <span class="app-mark" aria-hidden="true">◆</span>
@@ -20,13 +19,11 @@
     </div>
   </header>
 
-  <!-- Tab strip -->
   <div id="tabstrip" role="tablist" aria-label="Tabs">
     <div id="tabs" class="tabs"></div>
     <button type="button" id="btn-new-tab" class="tab-new" title="New tab" aria-label="New tab">+</button>
   </div>
 
-  <!-- Toolbar: nav + omnibox -->
   <div id="toolbar">
     <div class="nav-group">
       <button type="button" id="btn-back" class="tool-btn" title="Back" aria-label="Back" disabled>◀</button>
@@ -51,7 +48,6 @@
     </div>
   </div>
 
-  <!-- Workspace: optional sidebar + content host -->
   <div id="workspace">
     <aside id="sidebar" class="sidebar" hidden aria-label="Sidebar">
       <div class="sidebar-header">
@@ -66,22 +62,15 @@
       <div id="sidebar-panel" class="sidebar-panel" hidden></div>
     </aside>
 
-    <!--
-      Content host
-      ------------
-      Local states (welcome, settings, error, plain-text, …) render here.
-      Remote pages are loaded by the *native* webview (Go → webview.Navigate).
-      See docs/GUI.md § Content surface.
-    -->
     <main id="content-host" class="content-host" role="main">
       <section id="welcome" class="state-panel active">
         <div class="welcome-card">
           <h1>Conductino</h1>
           <p class="muted">Study browser · restructure foundation</p>
-          <p>Type a URL or search query in the omnibox. Navigation is handled by the native webview.</p>
+          <p>Type a URL or search query in the omnibox. Navigation is handled by the native webview via the Go bridge.</p>
           <ul class="welcome-hints">
-            <li>Tabs, toolbar, sidebar, and themes are live in this chrome.</li>
-            <li>Remote pages load natively (not via iframe).</li>
+            <li>Tabs are owned by Go (<code>bridge.TabManager</code>).</li>
+            <li>Remote pages load with <code>hostNavigate</code> → <code>webview.Navigate</code>.</li>
             <li>Open the sidebar for Settings (theme + search engine).</li>
           </ul>
         </div>
@@ -90,7 +79,6 @@
       <section id="settings-panel" class="state-panel" hidden>
         <div class="settings-card">
           <h2>Settings</h2>
-
           <label class="field">
             <span>Theme</span>
             <select id="setting-theme">
@@ -98,7 +86,6 @@
               <option value="aurora-light">Aurora Light</option>
             </select>
           </label>
-
           <label class="field">
             <span>Search engine</span>
             <select id="setting-engine">
@@ -108,7 +95,6 @@
               <option value="startpage">Startpage</option>
             </select>
           </label>
-
           <p class="muted small">Preferences are stored in the browser for now. Persistent storage will move to the C++ backend later.</p>
           <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
         </div>
@@ -124,6 +110,7 @@
     </main>
   </div>
 
+  <script src="js/bridge.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
