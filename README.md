@@ -1,130 +1,84 @@
-# Conductino Study Browser
+# Conductino Study Browser (Desktop)
 
-### NOTE: PROJECT STILL AT INITITIAL STAGES, NOT YET, ALOT OF THINGS SEEN HERE NOT YET ACHIEVED, THIS IS AS A GUIDE TO MYSELF TOO
+**Branch: `restructure`** — foundational rewrite in progress.
 
-A modular research browser built with **Go** (frontend shell + IPC router) and
-**Zig/C** (high-performance document & storage backend). Also **plain HTML/CSS/JS** for the UI skin. The two runtimes communicate over a local REST API.
+A modular research / study browser for the desktop.  
+It is the PC counterpart of [Conductino-Android](https://github.com/ojilon/Conductino-Android).
 
-```
-Basic project structure
-```
-```
-Conductino-study-browser/
-│
-├── backend-core/          # Zig / C territory
-│   ├── src/
-│   │   ├── main.zig       # HTTP server + entry point
-│   │   ├── document.zig   # Text / HTML / PDF processing
-│   │   └── storage.zig    # SQLite (C amalgamation) wrapper
-│   ├── build.zig          # Zig build configuration
-│   └── third_party/       # C libraries like: sqlite3.c / sqlite3.h / lexbor / ini.h
-│
-├── frontend-ui/           # Go territory
-│   ├── main.go            # Initializes WebView2 window + IPC server
-│   ├── go.mod
-│   ├── config.yaml
-│   ├── handlers/
-│   │   └── api.go         # Forwards JSON packets to the Zig backend
-│   └── web/               # The "skin" of the browser (loaded by WebView2)
-│       ├── index.html     # Control bar · WebView pane · Study sidebar
-│       ├── style.css
-│       └── app.js         # Captures text selections, calls /api/save_note
-│
-└── README.md
+### Stack
 
-```
+| Layer | Technology |
+|-------|------------|
+| Shell & chrome | Go + [webview_go](https://github.com/webview/webview_go) + vanilla HTML/CSS/JS |
+| Content surface | **Native webview** (loads remote pages itself) |
+| Native core | C++23 + CMake (`backend/`) |
+| Experiments | Zig (`backend-core/`, optional) |
+
+### Critical design rule
+
+> The native webview is the only component that talks to the network for page loads.  
+> Go does **not** fetch pages and inject them into an iframe.  
+> The C++ backend does **not** perform network I/O.
+
+This keeps the browser looking like a normal human-driven browser (Cloudflare, anti-bot systems, cookies, redirects, etc. work as expected) and keeps the architecture clean.
+
+After a page is natively loaded and visible, the app may still inject scripts, extract text, or offer study tools (highlights, notes, reader view, …).
 
 ---
 
-### Architecture
+## Quick links
+
+- Foundation & roadmap → [docs/FOUNDATION.md](docs/FOUNDATION.md)
+- GUI skeleton & extension guide → [docs/GUI.md](docs/GUI.md)
+- Docs index → [docs/README.md](docs/README.md)
+
 ---
 
-## Data Pipeline
+## Project layout (target)
 
 ```
-[Raw Input]
-    ↓
-[Zig Memory Buffer Engine]
-    ↓
-[SQLite Engine]
+Conductino/
+├── frontend/          # Go + webview_go + HTML/CSS/JS chrome
+├── backend/           # C++23 + CMake (storage, document, … — no network)
+├── backend-core/      # Zig experiments (kept for now)
+├── config/            # search engines, settings schema, …
+├── docs/              # foundation, GUI, themes, …
+├── frontend-ui/       # OLD working tree (to be removed after migration)
+└── …
 ```
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Frontend: Go + WebView2 (github.com/webview/webview_go)     │
-│  - main.go      : native window + IPC server                 │
-│  - handlers/api.go : JSON bridge to Zig backend              │
-│  - web/         : HTML/CSS/JS browser skin                   │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ REST API / JSON
-                        │ eg using 127.0.0.1:8080  <->  127.0.0.1:8081
-                        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Backend: Zig + C libraries                                  │
-│  - main.zig      : HTTP server, routes requests              │
-│  - document.zig  : MemoryBufferEngine + HTML parser (lexbor) │
-│  - storage.zig   : SQLite C bindings + FTS5                  │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ C FFI
-                        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Embedded C libraries                                        │
-│  - sqlite3       : notes/highlights database                 │
-│  - lexbor        : HTML5 parsing & structural indexing       │
-│  - ini.h         : backend configuration                     │
-└──────────────────────────────────────────────────────────────┘
-```
+See [docs/FOUNDATION.md](docs/FOUNDATION.md) for the full map and rules.
 
-```
+---
 
+## Status (restructure)
 
-## Architectural rules
+| Area | Status |
+|------|--------|
+| Architecture rules & docs | Done |
+| Chrome-like GUI skeleton | Next |
+| Native webview as sole content surface | Next |
+| Themes (dark/light) + multi search engines | Planned |
+| C++23 backend skeleton | Planned |
+| Migration of useful non-network logic from `frontend-ui` | Planned |
 
-| Rule                       | Implementation                                              |
-| -------------------------- | ----------------------------------------------------------- |
-| Local Context Isolation    | Web content ↔ Backend logic communicate **only** over REST  |
-| Data pipeline              | `[Raw Input] → [Zig Memory Buffer] → [SQLite Engine]`       |
-| No external pkg managers   | Zig native build system, Go modules only                    |
-| Manual memory in Zig       | like `std.mem.Allocator` usage                              |
+---
 
-## Library usage map
+## Building (will be updated as the skeleton lands)
 
-### Go (frontend-ui)
-| Library                            | Purpose                                            |
-| ---------------------------------- | -------------------------------------------------- |
-| `github.com/webview/webview_go`    | Wraps Microsoft WebView2 (native window on Win11)  |
-| `gopkg.in/yaml.v3`                 | Parses `config.yaml` at startup                    |
-| `golang.org/x/net/html`            | Tokenizes data streams when archiving pages       |
-| `github.com/ledongthuc/pdf`        | Extracts text maps from local PDF files            |
+See [BUILDING.md](BUILDING.md). The old `frontend-ui` instructions still apply for the previous working tree; the new `frontend/` path will be documented as soon as the skeleton runs.
 
-### Zig / C (backend-core)
-| Library                            | Purpose                                            |
-| ---------------------------------- | -------------------------------------------------- |
-| `sqlite3` (C amalgamation)         | Embedded note/metadata storage + FTS5 search       |
-| `lexbor` (pure C)                  | Ultra-fast HTML5 parsing & structural indexing     |
-| `ini.h`                            | Tiny INI parser for backend config                 |
+---
 
-## Build & run
+## Contributing / extending
 
-```bash
-# 1. Build the Zig backend
-cd backend-core
-zig build -Doptimize=ReleaseFast
+- Prefer small, focused changes.
+- Add a short README in any new feature directory.
+- Follow the rules in `docs/FOUNDATION.md` (especially the native-webview network rule).
+- GUI extension points are described in `docs/GUI.md`.
 
-# 2. Run the Go frontend (it will spawn the Zig backend as a child process)
-cd ../frontend-ui
-go run main.go
-```
+---
 
-## API endpoints (Zig backend)
+## License
 
-| Method | Route             | Body / Query             | Description                       |
-| ------ | ----------------- | ------------------------ | --------------------------------- |
-| POST   | `/api/save_note`  | JSON `NoteHighlightEvent`| Persists a highlight into SQLite  |
-| GET    | `/api/search`     | `?query=memory`          | FTS5 search over highlights       |
-
-
-## Some short notes
-- **Why manual memory in Zig?** It gives deterministic allocation and deallocation. There is no garbage collector that could pause the UI thread while parsing large files.
-- **How do JSON packets bridge Go and Zig?** Both languages can serialize and deserialize JSON. The Go frontend builds a struct, marshals it to bytes, sends it over HTTP, and the Zig backend parses it back into a struct.
-- **Why embed SQLite as C code?** SQLite is battle-tested, file-based, and requires no external database server. Zig imports `sqlite3.h` directly and links the amalgamation into one binary.
+Add a top-level `LICENSE` when you decide on terms.
