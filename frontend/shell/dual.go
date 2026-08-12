@@ -61,31 +61,54 @@ func (h *DualHost) Content() ContentSurface {
 
 // ShowLocalContent hides the remote content surface and shows a chrome panel.
 // Never reloads the chrome document when dual is active.
-func (h *DualHost) ShowLocalContent(path string) {
-	log.Printf("[shell] local content %s (dual=%v)", path, h.DualActive())
-	if h.DualActive() {
-		h.content.Hide()
-		// Drive panel visibility inside the already-loaded chrome document.
-		switch := path
-		if panel == "" {
-			panel = "welcome"
-		}
-		js := `(function(){ if (window.ConductinoChrome && window.ConductinoChrome.showWelcome) {` +
-			` window.ConductinoChrome.showWelcome(); } ` +
-			`var w=document.getElementById('welcome'); if(w){ w.classList.add('active'); w.removeAttribute('hidden'); }` +
-			`})()`
-		if panel == "settings" {
-			js = `(function(){ var s=document.getElementById('settings-panel');` +
-				`['welcome','settings-panel','stub-panel'].forEach(function(id){` +
-				`var n=document.getElementById(id); if(!n)return;` +
-				`var on=id==='settings-panel'; n.classList.toggle('active',on);` +
-				`if(on)n.removeAttribute('hidden'); else n.setAttribute('hidden','');});})()`
-		}
-		h.chrome.Eval(js)
-		return
-	}
-	h.chrome.LoadChrome(h.chromeURL)
+func (h *DualHost) ShowLocalContent(path string) { 
+    log.Printf("[shell] local content %s (dual=%v)", path, h.DualActive()) 
+    
+    if h.DualActive() { 
+        h.content.Hide() // Drive panel visibility inside the already-loaded chrome document. 
+        
+        panel := path 
+        if panel == "" { 
+            panel = "welcome" 
+        } 
+        
+        var js string
+        switch panel {
+        case "welcome":
+            js = `(function(){ 
+                if (window.ConductinoChrome && window.ConductinoChrome.showWelcome) { 
+                    window.ConductinoChrome.showWelcome(); 
+                } 
+                var w=document.getElementById("welcome"); 
+                if(w){ 
+                    w.classList.add("active"); 
+                    w.removeAttribute("hidden"); 
+                } 
+            })()`
+            
+        case "settings":
+            js = `(function(){ 
+                var s=document.getElementById("settings-panel"); 
+                ["welcome", "settings-panel", "stub-panel"].forEach(function(id){ 
+                    var n=document.getElementById(id); 
+                    if(!n) return; 
+                    var on=id==="settings-panel"; 
+                    n.classList.toggle("active", on); 
+                    if(on) n.removeAttribute("hidden"); 
+                    else n.setAttribute("hidden", "");
+                });
+            })()`
+        }
+        
+        if js != "" {
+            h.chrome.Eval(js)
+        }
+        return 
+    } 
+    
+    h.chrome.LoadChrome(h.chromeURL) 
 }
+
 
 // ShowRemoteContent navigates only the content surface when dual is active.
 func (h *DualHost) ShowRemoteContent(url string) {
