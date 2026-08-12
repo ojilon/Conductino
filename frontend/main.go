@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"frontend/bridge"
 	"frontend/handlers"
@@ -33,7 +34,6 @@ func main() {
 	webDir := resolveWebDir(cwd)
 	log.Printf("[frontend] serving chrome from %s", webDir)
 
-	// C++ core (no-op until cgo links libconductino_core)
 	dataDir := filepath.Join(cwd, "conductino-data")
 	if err := bridge.NativeInit(dataDir); err != nil {
 		log.Printf("[frontend] native init: %v", err)
@@ -52,11 +52,26 @@ func main() {
 
 	w.SetTitle(cfg.Window.Title)
 	w.SetSize(cfg.Window.Width, cfg.Window.Height, webview.HintNone)
-
 	host.Bind(w)
 
-	log.Printf("[frontend] chrome at %s (see docs/SHELL.md — dual surface next)", chromeURL)
+	// Load chrome first so the window HWND exists.
+	log.Printf("[frontend] chrome at %s", chromeURL)
 	w.Navigate(chromeURL)
+
+	// Attach content WebView2 (Windows). Give the chrome webview a moment
+	// to create its HWND before embedding the second controller.
+	contentData := filepath.Join(dataDir, "content-webview")
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		w.Dispatch(func() {
+			if host.AttachContentSurface(contentData) {
+				log.Printf("[frontend] dual surface attached")
+			} else {
+				log.Printf("[frontend] dual surface not attached — single-surface fallback")
+			}
+		})
+	}()
+
 	w.Run()
 }
 

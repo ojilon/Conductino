@@ -5,28 +5,27 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"unsafe"
 
 	"frontend/shell"
 
 	webview "github.com/webview/webview_go"
 )
 
-// Host owns the tab model and delegates surfaces to shell.
-// Until dual-WebView exists, SingleSurfaceHost is used — remote
-// Navigate still replaces chrome (docs/SHELL.md).
+// Host owns tabs and a DualHost shell (chrome + content surfaces).
 type Host struct {
 	mu        sync.Mutex
 	w         webview.WebView
 	tabs      *TabManager
 	chromeURL string
-	shell     *shell.SingleSurfaceHost
+	shell     *shell.DualHost
 }
 
 func NewHost(chromeURL string) *Host {
 	return &Host{
 		tabs:      NewTabManager(),
 		chromeURL: chromeURL,
-		shell:     shell.NewSingleSurfaceHost(chromeURL),
+		shell:     shell.NewDualHost(chromeURL),
 	}
 }
 
@@ -34,7 +33,24 @@ func (h *Host) SetWebView(w webview.WebView) {
 	h.mu.Lock()
 	h.w = w
 	h.mu.Unlock()
-	h.shell.SetWebView(w)
+	h.shell.SetChromeWebView(w)
+}
+
+// AttachContentSurface embeds the Windows content WebView2 on the main HWND.
+// No-op / false on unsupported platforms.
+func (h *Host) AttachContentSurface(dataDir string) bool {
+	h.mu.Lock()
+	w := h.w
+	h.mu.Unlock()
+	if w == nil {
+		return false
+	}
+	hwnd := uintptr(w.Window())
+	if hwnd == 0 {
+		log.Printf("[host] AttachContentSurface: null window handle")
+		return false
+	}
+	return h.shell.AttachContent(hwnd, dataDir)
 }
 
 func (h *Host) destroy() {
@@ -55,26 +71,32 @@ func (h *Host) PushTabsToChrome() {
 		return
 	}
 	js := fmt.Sprintf(`(function(){ if (window.ConductinoChrome && window.ConductinoChrome.applyTabSnapshot) { window.ConductinoChrome.applyTabSnapshot(%s); } })()`, string(b))
-	h.shell.Eval(js)
+	h.shell.EvalChrome(js)
 }
 
 func (h *Host) showChrome() {
-	h.shell.LoadChrome(h.chromeURL)
+	if h.shell.DualActive() {
+		// Hide remote content; chrome document stays loaded.
+		h.shell.ShowLocalContent("welcome")
+		return
+	}
+	h.shell.LoadChrome()
 }
 
 func (h *Host) showContent(url string) {
-	if url == "" {
-		h.showChrome()
-		return
-	}
 	h.shell.ShowRemoteContent(url)
 }
 
 func (h *Host) Bind(w webview.WebView) {
-	w.Bind("hostPing", func() string { return "pong from Go host" })
+	w.Bind("hostPing", func() string {
+		if h.shell.DualActive() {
+			return "pong dual-surface"
+		}
+		return "pong single-surface"
+	})
 
 	w.Bind("hostMinimize", func() {
-		log.Printf("[host] minimize requested (wire via native handle later)")
+		log.Printf("[host] minimize requested")
 	})
 	w.Bind("hostMaximize", func() {
 		log.Printf("[host] maximize/restore requested")
@@ -126,7 +148,7 @@ func (h *Host) Bind(w webview.WebView) {
 		if url == "" {
 			return
 		}
-		log.Printf("[host] native navigate → %s", url)
+		log.Printf("[host] navigate → %s (dual=%v)", url, h.shell.DualActive())
 		h.tabs.Navigate(url)
 		h.PushTabsToChrome()
 		h.showContent(url)
@@ -135,7 +157,6 @@ func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostGoBack", func() {
 		url, ok := h.tabs.Back()
 		if !ok {
-			log.Printf("[host] goBack: nothing")
 			return
 		}
 		log.Printf("[host] goBack → %s", url)
@@ -146,7 +167,6 @@ func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostGoForward", func() {
 		url, ok := h.tabs.Forward()
 		if !ok {
-			log.Printf("[host] goForward: nothing")
 			return
 		}
 		log.Printf("[host] goForward → %s", url)
@@ -161,12 +181,14 @@ func (h *Host) Bind(w webview.WebView) {
 			return
 		}
 		log.Printf("[host] reload → %s", url)
-		h.shell.Content().Reload()
+		h.shell.ReloadContent()
 	})
 
 	w.Bind("hostShowChrome", func() {
-		log.Printf("[host] show chrome %s", h.chromeURL)
 		h.showChrome()
 		h.PushTabsToChrome()
 	})
+
+	// Silence unused import on non-cgo toolchains that still typecheck unsafe.
+	_ = unsafe.Sizeof(0)
 }
