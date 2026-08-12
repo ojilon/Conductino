@@ -43,3 +43,5 @@ frontend_combined.txt
 targeted_frontend_files.txt
 
 backend/build/
+backend/conductino-data/
+frontend/conductino-data/
