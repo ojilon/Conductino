@@ -1,0 +1,392 @@
+/* Conductino chrome — tabs + toolbar; floating sidebar */
+
+:root,
+[data-theme="aurora-dark"] {
+  --bg: #0b1020;
+  --bg-elev: #141a30;
+  --bg-elev-2: #1e2745;
+  --fg: #e8ecfb;
+  --muted: #8891b4;
+  --accent: #5ee7c4;
+  --accent2: #7c7bff;
+  --border: #26305a;
+  --danger: #ff6b8a;
+  --tab-active: #1e2745;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --tabstrip-h: 38px;
+  --toolbar-h: 44px;
+  --sidebar-w: 260px;
+}
+
+[data-theme="aurora-light"] {
+  --bg: #f4f6fb;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #e8ecf6;
+  --fg: #12162a;
+  --muted: #5c6585;
+  --accent: #0d9f7e;
+  --accent2: #4f4de0;
+  --border: #c9d0e6;
+  --danger: #d9365a;
+  --tab-active: #e8ecf6;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 13px;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+#tabstrip {
+  height: var(--tabstrip-h);
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 4px 8px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 200px;
+  min-width: 80px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-bottom: 0;
+}
+
+.tab:hover {
+  background: var(--bg-elev);
+  color: var(--fg);
+}
+
+.tab.active {
+  background: var(--tab-active);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.tab-close {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.tab-close:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg);
+}
+
+.tab-new {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 2px;
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.tab-new:hover {
+  background: var(--bg-elev);
+  color: var(--fg);
+}
+
+#toolbar {
+  height: var(--toolbar-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-group,
+.tool-end {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tool-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.tool-btn:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+  color: var(--fg);
+}
+
+.tool-btn[aria-pressed="true"] {
+  background: var(--bg-elev-2);
+  color: var(--accent);
+}
+
+.omnibox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.omnibox:focus-within {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent2) 25%, transparent);
+}
+
+.omnibox-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+#omnibox {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  user-select: text;
+}
+
+#omnibox::placeholder {
+  color: var(--muted);
+}
+
+#workspace {
+  position: relative;
+  display: flex;
+  height: calc(100% - var(--tabstrip-h) - var(--toolbar-h));
+  min-height: 0;
+}
+
+/* Floating sidebar: overlays the left of the content band.
+   Content popup is inset by --sidebar-w when open (hostSidebarOpen). */
+.sidebar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+}
+
+.sidebar[hidden] {
+  display: none;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--fg);
+}
+
+.sidebar-item:hover {
+  background: var(--bg-elev-2);
+}
+
+.sidebar-item .stub {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.sidebar-panel {
+  flex: 1;
+  padding: 8px 12px;
+  overflow: auto;
+}
+
+.content-host {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--bg);
+  position: relative;
+}
+
+.state-panel {
+  display: none;
+  height: 100%;
+  padding: 32px 24px;
+}
+
+.state-panel.active {
+  display: block;
+}
+
+.state-panel[hidden] {
+  display: none !important;
+}
+
+.welcome-card,
+.settings-card {
+  max-width: 520px;
+  margin: 40px auto;
+  padding: 28px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.welcome-card h1,
+.settings-card h2,
+.welcome-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0;
+}
+
+.field span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.field select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.primary-btn {
+  margin-top: 12px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  background: var(--accent2);
+  color: #fff;
+  font-weight: 600;
+}
+
+.primary-btn:hover {
+  filter: brightness(1.08);
+}
