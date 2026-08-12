@@ -1,10 +1,7 @@
 /**
  * Conductino chrome bootstrap
- * Tabs · navigation · sidebar · settings · window controls
- *
- * Tab model + navigation are owned by Go (bridge package).
- * This file renders chrome and forwards user actions via ConductinoBridge.
- * See docs/BRIDGE.md and docs/GUI.md.
+ * Tabs · navigation · sidebar · settings
+ * Window min/max/close come from the OS title bar.
  */
 (function () {
   "use strict";
@@ -16,7 +13,6 @@
     startpage: { name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s" },
   };
 
-  // Local mirror of Go tab snapshot for rendering.
   var tabSnap = [];
   var settings = loadSettings();
 
@@ -38,9 +34,6 @@
     settingEngine: document.getElementById("setting-engine"),
     btnSettingsDone: document.getElementById("btn-settings-done"),
     btnStubBack: document.getElementById("btn-stub-back"),
-    btnMin: document.getElementById("btn-min"),
-    btnMax: document.getElementById("btn-max"),
-    btnClose: document.getElementById("btn-close"),
   };
 
   function B() {
@@ -126,7 +119,6 @@
     renderTabs();
   }
 
-  // Fallback local tabs if Go bindings are not present (browser preview).
   var localTabs = [];
   var localActive = null;
   var localNext = 1;
@@ -226,7 +218,6 @@
       b.navigate(url);
       return;
     }
-    // Preview fallback
     var t = activeFromSnap();
     if (t) {
       t.url = url;
@@ -246,7 +237,6 @@
     }
   }
 
-  // —— Events ——
   el.newTab.addEventListener("click", function () {
     var b = B();
     if (b) b.tabNew();
@@ -321,20 +311,6 @@
     showPanel("welcome");
   });
 
-  el.btnMin.addEventListener("click", function () {
-    var b = B();
-    if (b) b.minimize();
-  });
-  el.btnMax.addEventListener("click", function () {
-    var b = B();
-    if (b) b.maximize();
-  });
-  el.btnClose.addEventListener("click", function () {
-    var b = B();
-    if (b) b.close();
-  });
-
-  // —— Boot ——
   applyTheme(settings.theme || "aurora-dark");
   el.settingEngine.value = settings.engine || "duckduckgo";
 
@@ -354,7 +330,6 @@
     },
   };
 
-  // Pull initial tab list from Go when available.
   function syncFromHost() {
     var b = B();
     if (!b) {
@@ -370,7 +345,6 @@
     }
   }
 
-  // bridge.js may load before or after; retry briefly.
   syncFromHost();
   setTimeout(syncFromHost, 50);
   setTimeout(syncFromHost, 200);

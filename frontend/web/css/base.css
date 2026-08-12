@@ -1,5 +1,4 @@
-/* Conductino chrome — base layout + themes
-   Tokens aligned with Conductino-Android aurora palette. */
+/* Conductino chrome — tabs + toolbar only; OS owns title bar */
 
 :root,
 [data-theme="aurora-dark"] {
@@ -16,7 +15,6 @@
   --radius: 10px;
   --radius-sm: 8px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --titlebar-h: 36px;
   --tabstrip-h: 38px;
   --toolbar-h: 44px;
   --sidebar-w: 260px;
@@ -66,65 +64,6 @@ button:disabled {
   cursor: default;
 }
 
-/* —— Title bar —— */
-#titlebar {
-  height: var(--titlebar-h);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px 0 12px;
-  background: var(--bg-elev);
-  border-bottom: 1px solid var(--border);
-  /* Allow OS/window drag where supported */
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
-.titlebar-drag {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.app-mark {
-  color: var(--accent);
-  font-size: 12px;
-}
-
-.app-name {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-}
-
-.window-controls {
-  display: flex;
-  gap: 2px;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
-.win-btn {
-  width: 40px;
-  height: 28px;
-  border-radius: 6px;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--muted);
-}
-
-.win-btn:hover {
-  background: var(--bg-elev-2);
-  color: var(--fg);
-}
-
-.win-close:hover {
-  background: var(--danger);
-  color: #fff;
-}
-
-/* —— Tab strip —— */
 #tabstrip {
   height: var(--tabstrip-h);
   display: flex;
@@ -214,7 +153,6 @@ button:disabled {
   color: var(--fg);
 }
 
-/* —— Toolbar —— */
 #toolbar {
   height: var(--toolbar-h);
   display: flex;
@@ -289,10 +227,9 @@ button:disabled {
   color: var(--muted);
 }
 
-/* —— Workspace —— */
 #workspace {
   display: flex;
-  height: calc(100% - var(--titlebar-h) - var(--tabstrip-h) - var(--toolbar-h));
+  height: calc(100% - var(--tabstrip-h) - var(--toolbar-h));
   min-height: 0;
 }
 
@@ -407,13 +344,6 @@ button:disabled {
 
 .small {
   font-size: 12px;
-}
-
-.welcome-hints {
-  margin: 20px 0 0;
-  padding-left: 18px;
-  color: var(--muted);
-  line-height: 1.55;
 }
 
 .field {
