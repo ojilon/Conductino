@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"frontend/bridge"
 )
 
 // NoteHighlightEvent is the wire contract for study highlights/notes.
-// Eventually persisted by the C++ backend; for now held in-process.
+// Eventually persisted by the C++ backend; for now held in-process and
+// forwarded to conductino_core when NativeAvailable().
 type NoteHighlightEvent struct {
 	PageURL   string `json:"page_url"`
 	PageTitle string `json:"page_title"`
@@ -28,7 +31,6 @@ type Coords struct {
 	EndY   int `json:"end_y"`
 }
 
-// NoteStore is a temporary in-memory store until the C++ backend owns persistence.
 type NoteStore struct {
 	mu    sync.Mutex
 	notes []NoteHighlightEvent
@@ -66,7 +68,6 @@ func containsFold(hay, needle string) bool {
 }
 
 func indexFold(s, substr string) int {
-	// simple case-insensitive search without importing strings for one helper
 	ls, lsub := toLower(s), toLower(substr)
 	for i := 0; i+len(lsub) <= len(ls); i++ {
 		if ls[i:i+len(lsub)] == lsub {
@@ -88,7 +89,6 @@ func toLower(s string) string {
 	return string(b)
 }
 
-// SaveNoteHandler POST /api/notes — validates and stores a highlight.
 func (s *NoteStore) SaveNoteHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -111,19 +111,37 @@ func (s *NoteStore) SaveNoteHandler(w http.ResponseWriter, r *http.Request) {
 	if note.CreatedAt == 0 {
 		note.CreatedAt = time.Now().UnixMilli()
 	}
+
+	// Prefer C++ core when linked; always keep Go mirror for search while hybrid.
+	if bridge.NativeAvailable() {
+		clean, _ := json.Marshal(note)
+		if err := bridge.NativeNotesSaveJSON(string(clean)); err != nil {
+			log.Printf("[notes] native save failed: %v — falling back to memory", err)
+		} else {
+			log.Printf("[notes] saved via conductino_core")
+		}
+	}
 	s.Add(note)
 	log.Printf("[notes] saved selection=%q page=%s", trunc(note.Selection, 40), note.PageURL)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "created_at": note.CreatedAt})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "created_at": note.CreatedAt, "native": bridge.NativeAvailable()})
 }
 
-// SearchNotesHandler GET /api/notes?query=
 func (s *NoteStore) SearchNotesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "GET required", http.StatusMethodNotAllowed)
 		return
 	}
 	q := r.URL.Query().Get("query")
+
+	if bridge.NativeAvailable() {
+		if raw, err := bridge.NativeNotesSearch(q); err == nil && raw != "" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(raw))
+			return
+		}
+	}
+
 	results := s.Search(q)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{

@@ -33,6 +33,13 @@ func main() {
 	webDir := resolveWebDir(cwd)
 	log.Printf("[frontend] serving chrome from %s", webDir)
 
+	// C++ core (no-op until cgo links libconductino_core)
+	dataDir := filepath.Join(cwd, "conductino-data")
+	if err := bridge.NativeInit(dataDir); err != nil {
+		log.Printf("[frontend] native init: %v", err)
+	}
+	defer bridge.NativeShutdown()
+
 	api := handlers.NewAPI()
 	go startServer(cfg.IPC.FrontendListen, webDir, api)
 
@@ -48,7 +55,7 @@ func main() {
 
 	host.Bind(w)
 
-	log.Printf("[frontend] chrome at %s", chromeURL)
+	log.Printf("[frontend] chrome at %s (see docs/SHELL.md — dual surface next)", chromeURL)
 	w.Navigate(chromeURL)
 	w.Run()
 }

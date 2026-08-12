@@ -4,57 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
+
+	"frontend/shell"
 
 	webview "github.com/webview/webview_go"
 )
 
-// Host owns the native webview, tab model, and chrome URL for return-to-shell.
+// Host owns the tab model and delegates surfaces to shell.Host.
+// Until dual-WebView exists, shell.SingleSurfaceHost is used — remote
+// Navigate still replaces chrome (docs/SHELL.md).
 type Host struct {
-	mu        sync.Mutex
-	w         webview.WebView
 	tabs      *TabManager
 	chromeURL string
+	shell     *shell.SingleSurfaceHost
 }
 
 func NewHost(chromeURL string) *Host {
 	return &Host{
 		tabs:      NewTabManager(),
 		chromeURL: chromeURL,
+		shell:     shell.NewSingleSurfaceHost(chromeURL),
 	}
 }
 
 func (h *Host) SetWebView(w webview.WebView) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.w = w
+	h.shell.SetWebView(w)
 }
 
-func (h *Host) with(fn func(webview.WebView)) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.w != nil {
-		fn(h.w)
-	}
-}
-
-func (h *Host) navigateNative(url string) {
-	h.with(func(wv webview.WebView) {
-		wv.Dispatch(func() {
-			wv.Navigate(url)
-		})
-	})
-}
-
-func (h *Host) eval(js string) {
-	h.with(func(wv webview.WebView) {
-		wv.Dispatch(func() {
-			wv.Eval(js)
-		})
-	})
-}
-
-// PushTabsToChrome serializes tab snapshot into the chrome JS model.
 func (h *Host) PushTabsToChrome() {
 	snap := h.tabs.Snapshot()
 	b, err := json.Marshal(snap)
@@ -62,16 +38,26 @@ func (h *Host) PushTabsToChrome() {
 		log.Printf("[bridge] marshal tabs: %v", err)
 		return
 	}
-	// Only works while chrome document is loaded.
 	js := fmt.Sprintf(`(function(){ if (window.ConductinoChrome && window.ConductinoChrome.applyTabSnapshot) { window.ConductinoChrome.applyTabSnapshot(%s); } })()`, string(b))
-	h.eval(js)
+	h.shell.Eval(js)
 }
 
-// Bind registers all Go functions exposed to the chrome (and later content scripts).
+func (h *Host) showChrome() {
+	h.shell.LoadChrome(h.chromeURL)
+}
+
+func (h *Host) showContent(url string) {
+	if url == "" {
+		h.showChrome()
+		return
+	}
+	h.shell.ShowRemoteContent(url)
+}
+
+// Bind registers chrome-facing Go functions.
 func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostPing", func() string { return "pong from Go host" })
 
-	// —— Window ——
 	w.Bind("hostMinimize", func() {
 		log.Printf("[host] minimize requested (wire via native handle later)")
 	})
@@ -79,18 +65,17 @@ func (h *Host) Bind(w webview.WebView) {
 		log.Printf("[host] maximize/restore requested")
 	})
 	w.Bind("hostClose", func() {
-		h.with(func(wv webview.WebView) {
-			wv.Dispatch(func() { wv.Destroy() })
-		})
+		h.shell.Eval("") // keep API; destroy via webview
+		// Destroy is still on the underlying webview from main.
+		log.Printf("[host] close — process exit via webview.Destroy from main deferred")
 	})
 
-	// —— Tabs (Go is source of truth) ——
+	// Tabs: empty tab stays on chrome; tab with URL drives content surface.
 	w.Bind("hostTabNew", func() int {
 		id := h.tabs.NewTab("New Tab", "")
 		log.Printf("[host] tab new → %d", id)
 		h.PushTabsToChrome()
-		// Stay on chrome for empty tab.
-		h.navigateNative(h.chromeURL)
+		h.showChrome()
 		return id
 	})
 
@@ -100,10 +85,10 @@ func (h *Host) Bind(w webview.WebView) {
 		h.PushTabsToChrome()
 		active := h.tabs.Active()
 		if active == nil || active.URL == "" {
-			h.navigateNative(h.chromeURL)
+			h.showChrome()
 			return
 		}
-		h.navigateNative(active.URL)
+		h.showContent(active.URL)
 	})
 
 	w.Bind("hostTabActivate", func(id int) {
@@ -114,10 +99,10 @@ func (h *Host) Bind(w webview.WebView) {
 		h.PushTabsToChrome()
 		active := h.tabs.Active()
 		if active == nil || active.URL == "" {
-			h.navigateNative(h.chromeURL)
+			h.showChrome()
 			return
 		}
-		h.navigateNative(active.URL)
+		h.showContent(active.URL)
 	})
 
 	w.Bind("hostTabList", func() string {
@@ -125,7 +110,6 @@ func (h *Host) Bind(w webview.WebView) {
 		return string(b)
 	})
 
-	// —— Navigation (drives native webview) ——
 	w.Bind("hostNavigate", func(url string) {
 		if url == "" {
 			return
@@ -133,7 +117,8 @@ func (h *Host) Bind(w webview.WebView) {
 		log.Printf("[host] native navigate → %s", url)
 		h.tabs.Navigate(url)
 		h.PushTabsToChrome()
-		h.navigateNative(url)
+		// Content surface only — on single-surface this still replaces chrome.
+		h.showContent(url)
 	})
 
 	w.Bind("hostGoBack", func() {
@@ -144,7 +129,7 @@ func (h *Host) Bind(w webview.WebView) {
 		}
 		log.Printf("[host] goBack → %s", url)
 		h.PushTabsToChrome()
-		h.navigateNative(url)
+		h.showContent(url)
 	})
 
 	w.Bind("hostGoForward", func() {
@@ -155,24 +140,22 @@ func (h *Host) Bind(w webview.WebView) {
 		}
 		log.Printf("[host] goForward → %s", url)
 		h.PushTabsToChrome()
-		h.navigateNative(url)
+		h.showContent(url)
 	})
 
 	w.Bind("hostReload", func() {
 		url := h.tabs.CurrentURL()
 		if url == "" {
-			log.Printf("[host] reload: on chrome shell")
-			h.navigateNative(h.chromeURL)
+			h.showChrome()
 			return
 		}
 		log.Printf("[host] reload → %s", url)
-		h.navigateNative(url)
+		h.shell.Content().Reload()
 	})
 
 	w.Bind("hostShowChrome", func() {
 		log.Printf("[host] show chrome %s", h.chromeURL)
-		h.navigateNative(h.chromeURL)
-		// After chrome loads, JS will request tab list; also try push shortly.
+		h.showChrome()
 		h.PushTabsToChrome()
 	})
 }
