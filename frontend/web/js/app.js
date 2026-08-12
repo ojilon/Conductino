@@ -1,7 +1,6 @@
 /**
  * Conductino chrome bootstrap
- * Tabs · navigation · sidebar · settings
- * Window min/max/close come from the OS title bar.
+ * Tabs · navigation · floating sidebar · settings
  */
 (function () {
   "use strict";
@@ -85,7 +84,7 @@
       var close = document.createElement("span");
       close.className = "tab-close";
       close.title = "Close tab";
-      close.textContent = "×";
+      close.textContent = "\u00d7";
       close.addEventListener("click", function (e) {
         e.stopPropagation();
         var b = B();
@@ -161,12 +160,12 @@
 
   function updateOmniboxIcon(url) {
     if (!url) {
-      el.omniboxIcon.textContent = "🔍";
+      el.omniboxIcon.textContent = "\ud83d\udd0d";
       return;
     }
-    if (/^https:\/\//i.test(url)) el.omniboxIcon.textContent = "🔒";
-    else if (/^http:\/\//i.test(url)) el.omniboxIcon.textContent = "⚠";
-    else el.omniboxIcon.textContent = "📄";
+    if (/^https:\/\//i.test(url)) el.omniboxIcon.textContent = "\ud83d\udd12";
+    else if (/^http:\/\//i.test(url)) el.omniboxIcon.textContent = "\u26a0";
+    else el.omniboxIcon.textContent = "\ud83d\udcc4";
   }
 
   function showPanel(name) {
@@ -230,11 +229,16 @@
   function setSidebarOpen(open) {
     if (open) {
       el.sidebar.removeAttribute("hidden");
+      el.sidebar.classList.add("open");
       el.btnSidebar.setAttribute("aria-pressed", "true");
     } else {
       el.sidebar.setAttribute("hidden", "");
+      el.sidebar.classList.remove("open");
       el.btnSidebar.setAttribute("aria-pressed", "false");
     }
+    // Shift content popup so sidebar (chrome HTML) is not covered.
+    var b = B();
+    if (b && b.sidebarOpen) b.sidebarOpen(open);
   }
 
   el.newTab.addEventListener("click", function () {

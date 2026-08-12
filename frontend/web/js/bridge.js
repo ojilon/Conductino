@@ -1,12 +1,5 @@
 /**
  * Conductino JS ↔ Go bridge helpers
- *
- * Go bindings (webview.Bind) appear as global functions:
- *   hostNavigate, hostGoBack, hostGoForward, hostReload,
- *   hostTabNew, hostTabClose, hostTabActivate, hostTabList,
- *   hostShowChrome, hostMinimize, hostMaximize, hostClose, hostPing
- *
- * This module normalizes calls and tab-snapshot application.
  */
 (function (global) {
   "use strict";
@@ -62,6 +55,9 @@
       } catch (e) {
         return [];
       }
+    },
+    sidebarOpen: function (open) {
+      return call("hostSidebarOpen", !!open);
     },
     minimize: function () {
       return call("hostMinimize");

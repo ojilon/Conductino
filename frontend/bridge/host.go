@@ -11,7 +11,6 @@ import (
 	webview "github.com/webview/webview_go"
 )
 
-// Host owns tabs and DualHost (chrome locked + content surface).
 type Host struct {
 	mu        sync.Mutex
 	w         webview.WebView
@@ -71,12 +70,10 @@ func (h *Host) PushTabsToChrome() {
 	h.shell.EvalChrome(js)
 }
 
-// showChrome = empty / local tab: hide content surface, keep chrome document.
 func (h *Host) showChrome() {
 	h.shell.ShowLocalContent("welcome")
 }
 
-// showContent = omnibox / tab with URL: content surface only.
 func (h *Host) showContent(url string) {
 	h.shell.ShowRemoteContent(url)
 }
@@ -93,7 +90,12 @@ func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostMaximize", func() { log.Printf("[host] maximize/restore requested") })
 	w.Bind("hostClose", func() { h.destroy() })
 
-	// Tabs — never Navigate the chrome document when dual is active.
+	// Sidebar open → inset content so chrome sidebar floats over the page band.
+	w.Bind("hostSidebarOpen", func(open bool) {
+		log.Printf("[host] sidebar open=%v", open)
+		h.shell.SetSidebarOpen(open)
+	})
+
 	w.Bind("hostTabNew", func() int {
 		id := h.tabs.NewTab("New Tab", "")
 		log.Printf("[host] tab new → %d", id)
@@ -133,7 +135,6 @@ func (h *Host) Bind(w webview.WebView) {
 		return string(b)
 	})
 
-	// Omnibox / explicit navigate → content only.
 	w.Bind("hostNavigate", func(url string) {
 		if url == "" {
 			return

@@ -7,8 +7,6 @@ import (
 	webview "github.com/webview/webview_go"
 )
 
-// DualHost keeps chrome on the primary webview (local shell only) and
-// routes remote pages to a separate ContentWebView surface.
 type DualHost struct {
 	mu        sync.Mutex
 	chromeURL string
@@ -29,7 +27,6 @@ func (h *DualHost) SetChromeWebView(w webview.WebView) {
 	h.chrome.SetWebView(w)
 }
 
-// AttachContent embeds the content WebView2 and locks the chrome surface.
 func (h *DualHost) AttachContent(parentHWND uintptr, dataDir string) bool {
 	ok := h.content.Embed(parentHWND, dataDir)
 	h.mu.Lock()
@@ -59,58 +56,32 @@ func (h *DualHost) Content() ContentSurface {
 	return h.chrome
 }
 
-// ShowLocalContent hides the remote content surface and shows a chrome panel.
-// Never reloads the chrome document when dual is active.
-func (h *DualHost) ShowLocalContent(path string) { 
-    log.Printf("[shell] local content %s (dual=%v)", path, h.DualActive()) 
-    
-    if h.DualActive() { 
-        h.content.Hide() // Drive panel visibility inside the already-loaded chrome document. 
-        
-        panel := path 
-        if panel == "" { 
-            panel = "welcome" 
-        } 
-        
-        var js string
-        switch panel {
-        case "welcome":
-            js = `(function(){ 
-                if (window.ConductinoChrome && window.ConductinoChrome.showWelcome) { 
-                    window.ConductinoChrome.showWelcome(); 
-                } 
-                var w=document.getElementById("welcome"); 
-                if(w){ 
-                    w.classList.add("active"); 
-                    w.removeAttribute("hidden"); 
-                } 
-            })()`
-            
-        case "settings":
-            js = `(function(){ 
-                var s=document.getElementById("settings-panel"); 
-                ["welcome", "settings-panel", "stub-panel"].forEach(function(id){ 
-                    var n=document.getElementById(id); 
-                    if(!n) return; 
-                    var on=id==="settings-panel"; 
-                    n.classList.toggle("active", on); 
-                    if(on) n.removeAttribute("hidden"); 
-                    else n.setAttribute("hidden", "");
-                });
-            })()`
-        }
-        
-        if js != "" {
-            h.chrome.Eval(js)
-        }
-        return 
-    } 
-    
-    h.chrome.LoadChrome(h.chromeURL) 
+// SetSidebarOpen insets the content surface so the chrome sidebar is visible.
+func (h *DualHost) SetSidebarOpen(open bool) {
+	if !h.DualActive() {
+		return
+	}
+	var inset int32
+	if open {
+		inset = DefaultSidebarWidthPx
+	}
+	h.content.SetLeftInset(inset)
 }
 
+func (h *DualHost) ShowLocalContent(path string) {
+	log.Printf("[shell] local content %s (dual=%v)", path, h.DualActive())
+	if h.DualActive() {
+		h.content.Hide()
+		js := `(function(){ if (window.ConductinoChrome && window.ConductinoChrome.showWelcome) {` +
+			` window.ConductinoChrome.showWelcome(); } ` +
+			`var w=document.getElementById('welcome'); if(w){ w.classList.add('active'); w.removeAttribute('hidden'); }` +
+			`})()`
+		h.chrome.Eval(js)
+		return
+	}
+	h.chrome.LoadChrome(h.chromeURL)
+}
 
-// ShowRemoteContent navigates only the content surface when dual is active.
 func (h *DualHost) ShowRemoteContent(url string) {
 	if url == "" {
 		h.ShowLocalContent("welcome")
@@ -126,7 +97,6 @@ func (h *DualHost) ShowRemoteContent(url string) {
 }
 
 func (h *DualHost) LoadChrome() {
-	// Initial load only; no-op when locked.
 	h.chrome.LoadChrome(h.chromeURL)
 }
 

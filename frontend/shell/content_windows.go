@@ -14,8 +14,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// DefaultChromeTopPx reserves tab strip + toolbar (OS title bar is separate).
 const DefaultChromeTopPx int32 = 96
+
+// DefaultSidebarWidthPx matches CSS --sidebar-w (260px).
+const DefaultSidebarWidthPx int32 = 260
 
 var (
 	user32               = windows.NewLazySystemDLL("user32.dll")
@@ -26,7 +28,6 @@ var (
 	procClientToScreen   = user32.NewProc("ClientToScreen")
 	procShowWindow       = user32.NewProc("ShowWindow")
 	procBringWindowToTop = user32.NewProc("BringWindowToTop")
-	procSetForeground    = user32.NewProc("SetForegroundWindow")
 	procRegisterClassExW = user32.NewProc("RegisterClassExW")
 	procDefWindowProcW   = user32.NewProc("DefWindowProcW")
 	procGetModuleHandleW = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetModuleHandleW")
@@ -35,9 +36,7 @@ var (
 )
 
 const (
-	wsChild        = 0x40000000
 	wsPopup        = 0x80000000
-	wsVisible      = 0x10000000
 	wsClipChildren = 0x02000000
 	wsClipSiblings = 0x04000000
 	swShow         = 5
@@ -45,8 +44,7 @@ const (
 	swpNoActivate  = 0x0010
 	swpShowWindow  = 0x0040
 	swpNoCopyBits  = 0x0100
-	hwndTop        = 0 // HWND_TOP
-	hwndTopMost    = ^uintptr(0) - 1 // HWND_TOPMOST = -1
+	hwndTop        = 0
 )
 
 type rect struct {
@@ -98,35 +96,34 @@ func ensureContentClass() error {
 	return nil
 }
 
-// createContentHost builds an owned popup over the parent's content band.
-// A plain WS_CHILD sits under WebView2's full-client composition; a popup
-// owned by the parent paints above it while still moving with the app.
-func createContentHost(parent uintptr, topPad int32) (uintptr, error) {
+func createContentHost(parent uintptr, topPad, leftPad int32) (uintptr, error) {
 	if err := ensureContentClass(); err != nil {
 		return 0, err
 	}
 	var rc rect
 	procGetClientRect.Call(parent, uintptr(unsafe.Pointer(&rc)))
-	w := rc.Right - rc.Left
+	w := rc.Right - rc.Left - leftPad
 	h := rc.Bottom - rc.Top - topPad
+	if w < 50 {
+		w = 50
+	}
 	if h < 50 {
 		h = 50
 	}
-	pt := point{X: 0, Y: topPad}
+	pt := point{X: leftPad, Y: topPad}
 	procClientToScreen.Call(parent, uintptr(unsafe.Pointer(&pt)))
 
 	hInstance, _, _ := procGetModuleHandleW.Call(0)
-	// WS_POPUP + owner=parent → tool window tied to main frame, above chrome WV2.
 	r, _, err := procCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(contentClassName)),
 		0,
-		uintptr(wsPopup|wsClipChildren|wsClipSiblings), // not visible until Navigate
+		uintptr(wsPopup|wsClipChildren|wsClipSiblings),
 		uintptr(pt.X),
 		uintptr(pt.Y),
 		uintptr(w),
 		uintptr(h),
-		parent, // owner
+		parent,
 		0,
 		hInstance,
 		0,
@@ -143,6 +140,7 @@ type ContentWebView struct {
 	hostHWND   uintptr
 	parentHWND uintptr
 	topPad     int32
+	leftPad    int32 // sidebar inset when open
 	bounds     Bounds
 	ready      bool
 	hidden     bool
@@ -163,7 +161,7 @@ func (c *ContentWebView) Embed(parentHWND uintptr, dataDir string) bool {
 	}
 	_ = os.MkdirAll(dataDir, 0o755)
 
-	host, err := createContentHost(parentHWND, c.topPad)
+	host, err := createContentHost(parentHWND, c.topPad, c.leftPad)
 	if err != nil || host == 0 {
 		log.Printf("[content] create host HWND failed: %v", err)
 		return false
@@ -174,7 +172,6 @@ func (c *ContentWebView) Embed(parentHWND uintptr, dataDir string) bool {
 	cr.DataPath = dataDir
 	cr.Debug = false
 
-	log.Printf("[content] embedding WebView2 on host data=%s", dataDir)
 	ok := false
 	func() {
 		defer func() {
@@ -186,7 +183,6 @@ func (c *ContentWebView) Embed(parentHWND uintptr, dataDir string) bool {
 		ok = cr.Embed(host)
 	}()
 	if !ok {
-		log.Printf("[content] Embed failed")
 		procDestroyWindow.Call(host)
 		return false
 	}
@@ -208,26 +204,45 @@ func (c *ContentWebView) Embed(parentHWND uintptr, dataDir string) bool {
 	return true
 }
 
+// SetLeftInset reserves horizontal space for a floating sidebar (px).
+func (c *ContentWebView) SetLeftInset(px int32) {
+	c.mu.Lock()
+	if px < 0 {
+		px = 0
+	}
+	c.leftPad = px
+	hidden := c.hidden
+	c.mu.Unlock()
+	log.Printf("[content] left inset = %d", px)
+	c.layoutHost()
+	if !hidden {
+		c.raise()
+	}
+}
+
 func (c *ContentWebView) layoutHost() {
 	c.mu.Lock()
 	parent := c.parentHWND
 	host := c.hostHWND
 	pad := c.topPad
+	left := c.leftPad
 	c.mu.Unlock()
 	if parent == 0 || host == 0 {
 		return
 	}
 	var rc rect
 	procGetClientRect.Call(parent, uintptr(unsafe.Pointer(&rc)))
-	w := rc.Right - rc.Left
+	w := rc.Right - rc.Left - left
 	h := rc.Bottom - rc.Top - pad
+	if w < 50 {
+		w = 50
+	}
 	if h < 50 {
 		h = 50
 	}
-	pt := point{X: 0, Y: pad}
+	pt := point{X: left, Y: pad}
 	procClientToScreen.Call(parent, uintptr(unsafe.Pointer(&pt)))
 
-	// HWND_TOP — sit above the chrome WebView2 composition.
 	procSetWindowPos.Call(
 		host,
 		hwndTop,
@@ -336,6 +351,9 @@ func (c *ContentWebView) SetBounds(b Bounds) {
 	c.bounds = b
 	if b.Y > 0 {
 		c.topPad = int32(b.Y)
+	}
+	if b.X > 0 {
+		c.leftPad = int32(b.X)
 	}
 	c.mu.Unlock()
 	c.layoutHost()
