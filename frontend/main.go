@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"frontend/bridge"
+	"frontend/handlers"
 	"frontend/pathutil"
 
 	webview "github.com/webview/webview_go"
@@ -32,7 +33,8 @@ func main() {
 	webDir := resolveWebDir(cwd)
 	log.Printf("[frontend] serving chrome from %s", webDir)
 
-	go startStaticServer(cfg.IPC.FrontendListen, webDir)
+	api := handlers.NewAPI()
+	go startServer(cfg.IPC.FrontendListen, webDir, api)
 
 	chromeURL := fmt.Sprintf("http://%s/", cfg.IPC.FrontendListen)
 	host := bridge.NewHost(chromeURL)
@@ -44,7 +46,6 @@ func main() {
 	w.SetTitle(cfg.Window.Title)
 	w.SetSize(cfg.Window.Width, cfg.Window.Height, webview.HintNone)
 
-	// Go ↔ JS bridge: tabs + navigation drive the native webview.
 	host.Bind(w)
 
 	log.Printf("[frontend] chrome at %s", chromeURL)
@@ -52,12 +53,13 @@ func main() {
 	w.Run()
 }
 
-func startStaticServer(addr, webDir string) {
+func startServer(addr, webDir string, api *handlers.API) {
 	mux := http.NewServeMux()
+	api.Register(mux)
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
-	log.Printf("[frontend] static server on http://%s/", addr)
+	log.Printf("[frontend] listening on http://%s/ (API + static)", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("static server failed: %v", err)
+		log.Fatalf("server failed: %v", err)
 	}
 }
 
