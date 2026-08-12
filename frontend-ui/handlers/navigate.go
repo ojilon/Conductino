@@ -83,7 +83,7 @@ func DetectNavigation(input string, selectEngine string) NavigationDecision {
 		}
 	}
 
-	//Defualt fallback search engine if invalid or unspecified
+	//Default fallback search engine if invalid or unspecified
 	baseURL, exists := SearchEngines[strings.ToLower(selectEngine)]
 	if !exists {
 		baseURL = SearchEngines["duckduckgo"]

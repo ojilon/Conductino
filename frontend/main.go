@@ -54,11 +54,10 @@ func main() {
 		the page lives in a real HTTP origin and same-origin policy applies
 		to every fetch() call inside app.js. Local context isolation somewhat archieved.
 		*/
-		w.Navigate(fmt.Sprintf("http://%s/ui/", cfg.IPC.FrontendListen))
+		w.Navigate(fmt.Sprintf("http://%s/", cfg.IPC.FrontendListen))
 
 		/*
-		w.Bind() is intentionally NOT used for data - see the architecture
-		comment at the top. Only a tiny diagnostic helper is exposed.
+		w.Bind() is intentionally NOT used for data
 		*/
 		w.Bind("hostPing", func() string { return " pong from Go host"})
 
