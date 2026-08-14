@@ -5,7 +5,7 @@
   "frontend:install": "",
   "frontend:build": "",
   "frontend:dev:watcher": "",
-  "frontend:dev:serverUrl": "auto",
+  "frontend:dev:serverUrl": "",
   "author": {
     "name": "ojilon",
     "email": ""
@@ -18,8 +18,6 @@
     "comments": "Local-first study browser"
   },
   "debounceMS": 100,
-  "devServer": "localhost:34115",
-  "appargs": "",
   "assetdir": "frontend",
   "reloaddirs": "frontend",
   "wailsjsdir": "frontend",
