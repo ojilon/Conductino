@@ -1,5 +1,5 @@
 /**
- * Study workspace — file open, paste, transfer, resizable split.
+ * Study workspace — file open, paste, transfer, summarize, resizable split.
  */
 (function () {
   "use strict";
@@ -15,6 +15,10 @@
   function status(msg) {
     var s = $("study-status");
     if (s) s.textContent = msg || "";
+  }
+
+  function AI() {
+    return window.ConductinoAI || null;
   }
 
   function activeDoc() {
@@ -57,7 +61,19 @@
     return String(sel);
   }
 
+  function loadAiConfig() {
+    try {
+      var raw = localStorage.getItem("conductino.ai");
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   function transferExact() {
+    var ai = AI();
     var text = selectionText();
     if (!text.trim()) {
       status("Select text in the source pane first");
@@ -65,21 +81,96 @@
     }
     var kn = $("study-knowledge");
     if (!kn) return;
-    var article = document.createElement("article");
-    article.className = "knowledge-block";
-    var header = document.createElement("header");
-    header.className = "knowledge-block-meta";
-    header.textContent = "exact · local · " + new Date().toISOString().slice(0, 19).replace("T", " ");
-    var body = document.createElement("div");
-    body.className = "knowledge-block-body";
-    body.setAttribute("contenteditable", "true");
-    body.style.whiteSpace = "pre-wrap";
-    body.textContent = text.trim();
-    article.appendChild(header);
-    article.appendChild(body);
-    kn.appendChild(article);
-    knowledgeMd += "\n\n" + text.trim() + "\n";
+    var doc = activeDoc();
+    if (ai && ai.makeBlock && ai.insertBlockIntoDOM) {
+      var block = ai.makeBlock(text.trim(), {
+        type: "exact",
+        sourceId: doc ? doc.id : "sel",
+        provider: "local",
+        model: "exact-transfer",
+      });
+      ai.insertBlockIntoDOM(kn, block, { appendCitations: false });
+      knowledgeMd = ai.appendBlockToMarkdown(knowledgeMd, block);
+    } else {
+      var article = document.createElement("article");
+      article.className = "knowledge-block";
+      var body = document.createElement("div");
+      body.className = "knowledge-block-body";
+      body.setAttribute("contenteditable", "true");
+      body.style.whiteSpace = "pre-wrap";
+      body.textContent = text.trim();
+      article.appendChild(body);
+      kn.appendChild(article);
+      knowledgeMd += "\n\n" + text.trim() + "\n";
+    }
     status("Transferred exact selection");
+  }
+
+  async function summarizeSelectionOrDoc() {
+    var ai = AI();
+    if (!ai || !ai.chunkText || !ai.setProviders) {
+      status("AI modules not loaded");
+      return;
+    }
+    var configs = loadAiConfig();
+    if (!configs.length) {
+      status("Add an API key in Settings → AI providers");
+      return;
+    }
+    ai.setProviders(configs);
+
+    var text = selectionText();
+    var doc = activeDoc();
+    if (!text && doc) text = doc.text;
+    if (!text || !text.trim()) {
+      status("Nothing to summarize — select text or open a document");
+      return;
+    }
+
+    var chunks = ai.chunkText(text, {
+      sourceId: doc ? doc.id : "sel",
+      targetTokens: 1600,
+      maxTokens: 2200,
+    });
+    var windows = ai.windowsFor(chunks, 6000, 500);
+    status("Summarizing " + chunks.length + " chunk(s) in " + windows.length + " window(s)…");
+
+    var system =
+      "You are an academic research assistant. Summarise clearly for a university student. " +
+      "Preserve technical terms and numbers. Do not invent facts. Use short paragraphs. " +
+      "Mark key claims with [1], [2] when useful.";
+
+    var kn = $("study-knowledge");
+    for (var w = 0; w < windows.length; w++) {
+      var payload = ai.assemblePayload(windows[w], { instruction: "Summarise the chunks above." });
+      try {
+        var result = await ai.registry.completeWithFailover({ system: system, user: payload });
+        var pages = windows[w].map(function (c) { return c.approxPage; });
+        var pageRange = pages.length ? [Math.min.apply(null, pages), Math.max.apply(null, pages)] : null;
+        var block = ai.makeBlock(result.text, {
+          type: "summary",
+          sourceId: doc ? doc.id : "sel",
+          chunkIds: windows[w].map(function (c) { return c.id; }),
+          pageRange: pageRange,
+          model: (configs[0] && configs[0].model) || "",
+          provider: result.providerName || result.providerId,
+        });
+        if (kn) ai.insertBlockIntoDOM(kn, block, { appendCitations: true });
+        knowledgeMd = ai.appendBlockToMarkdown(knowledgeMd, block);
+        status(
+          "Inserted summary from " +
+            result.providerName +
+            " (window " +
+            (w + 1) +
+            "/" +
+            windows.length +
+            ")"
+        );
+      } catch (e) {
+        status("LLM error: " + (e && e.message ? e.message : String(e)));
+        return;
+      }
+    }
   }
 
   function pasteText() {
@@ -172,12 +263,29 @@
     status("Knowledge pane cleared");
   }
 
+  function showChunkInfo() {
+    var ai = AI();
+    var doc = activeDoc();
+    if (!doc || !doc.text) {
+      status("Open or paste a document first");
+      return;
+    }
+    if (ai && ai.chunkText) {
+      var chunks = ai.chunkText(doc.text, { sourceId: doc.id });
+      var total = chunks.reduce(function (a, c) {
+        return a + (c.tokenEstimate || 0);
+      }, 0);
+      status(chunks.length + " chunks · ~" + total + " tokens");
+    } else {
+      status("~" + Math.ceil(doc.text.length / 4) + " tokens (rough)");
+    }
+  }
+
   function initSplitter() {
     var layout = $("study-layout");
     var left = $("study-left");
     var splitter = $("study-splitter");
     if (!layout || !left || !splitter) return;
-
     var dragging = false;
 
     function onMove(clientX, clientY) {
@@ -208,30 +316,15 @@
         : "col-resize";
       document.body.style.userSelect = "none";
     });
-
     window.addEventListener("mousemove", function (e) {
       onMove(e.clientX, e.clientY);
     });
-
     window.addEventListener("mouseup", function () {
       if (!dragging) return;
       dragging = false;
       splitter.classList.remove("dragging");
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-    });
-
-    splitter.addEventListener("touchstart", function () {
-      dragging = true;
-      splitter.classList.add("dragging");
-    }, { passive: true });
-    window.addEventListener("touchmove", function (e) {
-      if (!dragging || !e.touches[0]) return;
-      onMove(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: true });
-    window.addEventListener("touchend", function () {
-      dragging = false;
-      splitter.classList.remove("dragging");
     });
   }
 
@@ -248,21 +341,8 @@
     if (open) open.addEventListener("click", openFile);
     if (paste) paste.addEventListener("click", pasteText);
     if (transfer) transfer.addEventListener("click", transferExact);
-    if (summarize) {
-      summarize.addEventListener("click", function () {
-        status("Summarize wires in Step 4 (AI modules).");
-      });
-    }
-    if (chunk) {
-      chunk.addEventListener("click", function () {
-        var d = activeDoc();
-        if (!d || !d.text) {
-          status("Open or paste a document first");
-          return;
-        }
-        status("~" + Math.ceil(d.text.length / 4) + " tokens (rough) · full chunker in Step 4");
-      });
-    }
+    if (summarize) summarize.addEventListener("click", summarizeSelectionOrDoc);
+    if (chunk) chunk.addEventListener("click", showChunkInfo);
     if (clear) clear.addEventListener("click", clearKnowledge);
     if (exp) exp.addEventListener("click", exportMd);
     if (list) {
@@ -270,7 +350,6 @@
         setActiveDoc(list.value);
       });
     }
-
     initSplitter();
   }
 

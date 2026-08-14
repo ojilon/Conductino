@@ -57,8 +57,7 @@
         <section id="welcome" class="state-panel active">
           <div class="welcome-card">
             <h1>New Tab</h1>
-            <p class="muted">Search or type a URL in the address bar.</p>
-            <p class="muted small">Use the OS title-bar buttons (− □ ×) to minimize, maximize, or close. Drag the study splitter to resize panes.</p>
+            <p class="muted">Search or type a URL (opens in system browser). Use Study for papers and summaries.</p>
             <p class="muted small"><button type="button" id="btn-open-study" class="primary-btn">Open study workspace</button></p>
           </div>
         </section>
@@ -84,7 +83,7 @@
             </label>
             <hr />
             <h3>AI providers</h3>
-            <p class="muted small">Keys stay in localStorage. Full AI wiring in Step 4.</p>
+            <p class="muted small">Save a key, then use Summarize in Study. Failover uses first working provider.</p>
             <label class="field">
               <span>Provider preset</span>
               <select id="setting-ai-preset">
@@ -128,7 +127,7 @@
                 <select id="study-doc-list" aria-label="Open documents"></select>
               </div>
               <div id="study-source" class="study-source" contenteditable="false" tabindex="0">
-                <p class="muted">Open or paste a document. Drag the middle bar to resize panes.</p>
+                <p class="muted">Open or paste a document. Select text, then Transfer or Summarize.</p>
               </div>
               <div class="study-actions">
                 <button type="button" id="btn-transfer-exact" class="tool-btn">Transfer exact</button>
@@ -153,6 +152,9 @@
   </div>
 
   <script src="/js/bridge.js"></script>
+  <script src="/js/ai/provider.js"></script>
+  <script src="/js/ai/chunker.js"></script>
+  <script src="/js/ai/output_parser.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/study.js"></script>
 </body>
