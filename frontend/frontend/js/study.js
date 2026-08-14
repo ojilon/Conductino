@@ -1,5 +1,5 @@
 /**
- * Study workspace — paste/transfer now; summarize/file in Steps 3–4.
+ * Study workspace — paste/transfer + resizable split.
  */
 (function () {
   "use strict";
@@ -144,6 +144,79 @@
     status("Knowledge pane cleared");
   }
 
+  /** Drag the middle bar to resize left/right study panes. */
+  function initSplitter() {
+    var layout = $("study-layout");
+    var left = $("study-left");
+    var splitter = $("study-splitter");
+    if (!layout || !left || !splitter) return;
+
+    var dragging = false;
+
+    function onMove(clientX, clientY) {
+      if (!dragging) return;
+      var rect = layout.getBoundingClientRect();
+      var vertical = window.matchMedia("(max-width: 700px)").matches;
+      if (vertical) {
+        var y = clientY - rect.top;
+        var pct = Math.min(80, Math.max(20, (y / rect.height) * 100));
+        left.style.flex = "0 0 " + pct + "%";
+        left.style.height = pct + "%";
+        left.style.width = "100%";
+      } else {
+        var x = clientX - rect.left;
+        var pctX = Math.min(80, Math.max(20, (x / rect.width) * 100));
+        left.style.flex = "0 0 " + pctX + "%";
+        left.style.width = pctX + "%";
+        left.style.height = "";
+      }
+    }
+
+    splitter.addEventListener("mousedown", function (e) {
+      e.preventDefault();
+      dragging = true;
+      splitter.classList.add("dragging");
+      document.body.style.cursor = window.matchMedia("(max-width: 700px)").matches
+        ? "row-resize"
+        : "col-resize";
+      document.body.style.userSelect = "none";
+    });
+
+    window.addEventListener("mousemove", function (e) {
+      onMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener("mouseup", function () {
+      if (!dragging) return;
+      dragging = false;
+      splitter.classList.remove("dragging");
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    });
+
+    // Touch support
+    splitter.addEventListener(
+      "touchstart",
+      function (e) {
+        dragging = true;
+        splitter.classList.add("dragging");
+      },
+      { passive: true }
+    );
+    window.addEventListener(
+      "touchmove",
+      function (e) {
+        if (!dragging || !e.touches[0]) return;
+        onMove(e.touches[0].clientX, e.touches[0].clientY);
+      },
+      { passive: true }
+    );
+    window.addEventListener("touchend", function () {
+      dragging = false;
+      splitter.classList.remove("dragging");
+    });
+  }
+
   function init() {
     var open = $("btn-doc-open");
     var paste = $("btn-doc-paste");
@@ -179,6 +252,8 @@
         setActiveDoc(list.value);
       });
     }
+
+    initSplitter();
   }
 
   if (document.readyState === "loading") {

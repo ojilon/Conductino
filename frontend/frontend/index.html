@@ -8,145 +8,148 @@
   <link rel="stylesheet" href="/css/study.css" />
 </head>
 <body>
-  <div id="tabstrip" role="tablist" aria-label="Tabs">
-    <div id="tabs" class="tabs"></div>
-    <button type="button" id="btn-new-tab" class="tab-new" title="New tab" aria-label="New tab">+</button>
-  </div>
-
-  <div id="toolbar">
-    <div class="nav-group">
-      <button type="button" id="btn-back" class="tool-btn" title="Back" aria-label="Back" disabled>◀</button>
-      <button type="button" id="btn-fwd" class="tool-btn" title="Forward" aria-label="Forward" disabled>▶</button>
-      <button type="button" id="btn-reload" class="tool-btn" title="Reload" aria-label="Reload">⟳</button>
+  <div id="app-root">
+    <div id="tabstrip" role="tablist" aria-label="Tabs">
+      <div id="tabs" class="tabs"></div>
+      <button type="button" id="btn-new-tab" class="tab-new" title="New tab" aria-label="New tab">+</button>
     </div>
 
-    <form id="omnibox-form" class="omnibox" autocomplete="off">
-      <span class="omnibox-icon" id="omnibox-icon" title="Scheme">🔍</span>
-      <input
-        id="omnibox"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        placeholder="Search or enter address"
-        aria-label="Address and search"
-      />
-    </form>
-
-    <div class="tool-end">
-      <button type="button" id="btn-study" class="tool-btn" title="Study workspace" aria-label="Study workspace">📚</button>
-      <button type="button" id="btn-sidebar" class="tool-btn" title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed="false">☰</button>
-    </div>
-  </div>
-
-  <div id="workspace">
-    <aside id="sidebar" class="sidebar" hidden aria-label="Sidebar">
-      <div class="sidebar-header">
-        <h2>Menu</h2>
-        <button type="button" id="btn-sidebar-close" class="tool-btn" title="Close sidebar" aria-label="Close sidebar">×</button>
+    <div id="toolbar">
+      <div class="nav-group">
+        <button type="button" id="btn-back" class="tool-btn" title="Back" aria-label="Back" disabled>◀</button>
+        <button type="button" id="btn-fwd" class="tool-btn" title="Forward" aria-label="Forward" disabled>▶</button>
+        <button type="button" id="btn-reload" class="tool-btn" title="Reload" aria-label="Reload">⟳</button>
       </div>
-      <nav class="sidebar-nav">
-        <button type="button" class="sidebar-item" data-action="settings">⚙ Settings</button>
-        <button type="button" class="sidebar-item" data-action="study">📚 Study workspace</button>
-        <button type="button" class="sidebar-item" data-action="downloads">⬇ Downloads <span class="stub">soon</span></button>
-        <button type="button" class="sidebar-item" data-action="bookmarks">☆ Bookmarks <span class="stub">soon</span></button>
-      </nav>
-    </aside>
 
-    <main id="content-host" class="content-host" role="main">
-      <section id="welcome" class="state-panel active">
-        <div class="welcome-card">
-          <h1>New Tab</h1>
-          <p class="muted">Search or type a URL in the address bar.</p>
-          <p class="muted small">External pages open via the system browser for now (Step 3 wires in-app navigation).</p>
-          <p class="muted small"><button type="button" id="btn-open-study" class="primary-btn">Open study workspace</button></p>
+      <form id="omnibox-form" class="omnibox" autocomplete="off">
+        <span class="omnibox-icon" id="omnibox-icon" title="Scheme">🔍</span>
+        <input
+          id="omnibox"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="Search or enter address"
+          aria-label="Address and search"
+        />
+      </form>
+
+      <div class="tool-end">
+        <button type="button" id="btn-study" class="tool-btn" title="Study workspace" aria-label="Study workspace">📚</button>
+        <button type="button" id="btn-sidebar" class="tool-btn" title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed="false">☰</button>
+      </div>
+    </div>
+
+    <div id="workspace">
+      <aside id="sidebar" class="sidebar" hidden aria-label="Sidebar">
+        <div class="sidebar-header">
+          <h2>Menu</h2>
+          <button type="button" id="btn-sidebar-close" class="tool-btn" title="Close sidebar" aria-label="Close sidebar">×</button>
         </div>
-      </section>
+        <nav class="sidebar-nav">
+          <button type="button" class="sidebar-item" data-action="settings">⚙ Settings</button>
+          <button type="button" class="sidebar-item" data-action="study">📚 Study workspace</button>
+          <button type="button" class="sidebar-item" data-action="downloads">⬇ Downloads <span class="stub">soon</span></button>
+          <button type="button" class="sidebar-item" data-action="bookmarks">☆ Bookmarks <span class="stub">soon</span></button>
+        </nav>
+      </aside>
 
-      <section id="settings-panel" class="state-panel" hidden>
-        <div class="settings-card">
-          <h2>Settings</h2>
-          <label class="field">
-            <span>Theme</span>
-            <select id="setting-theme">
-              <option value="aurora-dark">Aurora Dark</option>
-              <option value="aurora-light">Aurora Light</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Search engine</span>
-            <select id="setting-engine">
-              <option value="duckduckgo">DuckDuckGo</option>
-              <option value="google">Google</option>
-              <option value="bing">Bing</option>
-              <option value="startpage">Startpage</option>
-            </select>
-          </label>
-          <hr />
-          <h3>AI providers</h3>
-          <p class="muted small">Keys stay in localStorage. Full AI wiring in Step 4.</p>
-          <label class="field">
-            <span>Provider preset</span>
-            <select id="setting-ai-preset">
-              <option value="google">Google AI Studio (Gemini)</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="groq">Groq</option>
-              <option value="custom">Custom endpoint</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>API key</span>
-            <input id="setting-ai-key" type="password" autocomplete="off" placeholder="paste key" />
-          </label>
-          <label class="field">
-            <span>Endpoint (custom)</span>
-            <input id="setting-ai-endpoint" type="text" placeholder="https://..." />
-          </label>
-          <label class="field">
-            <span>Model</span>
-            <input id="setting-ai-model" type="text" placeholder="gemini-2.0-flash" />
-          </label>
-          <button type="button" id="btn-ai-save" class="primary-btn">Save AI config</button>
-          <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
-        </div>
-      </section>
-
-      <section id="stub-panel" class="state-panel" hidden>
-        <div class="welcome-card">
-          <h2 id="stub-title">Coming soon</h2>
-          <p class="muted" id="stub-body">Placeholder.</p>
-          <button type="button" id="btn-stub-back" class="primary-btn">Back</button>
-        </div>
-      </section>
-
-      <section id="study-panel" class="state-panel" hidden>
-        <div class="study-layout">
-          <div class="study-left">
-            <div class="study-toolbar">
-              <button type="button" id="btn-doc-open" class="primary-btn">Open file…</button>
-              <button type="button" id="btn-doc-paste" class="tool-btn">Paste text</button>
-              <select id="study-doc-list" aria-label="Open documents"></select>
-            </div>
-            <div id="study-source" class="study-source" contenteditable="false" tabindex="0">
-              <p class="muted">Open or paste a document. Select text, then transfer or summarize (AI in Step 4).</p>
-            </div>
-            <div class="study-actions">
-              <button type="button" id="btn-transfer-exact" class="tool-btn">Transfer exact</button>
-              <button type="button" id="btn-summarize" class="primary-btn">Summarize &amp; transfer</button>
-              <button type="button" id="btn-chunk-info" class="tool-btn">Chunk info</button>
-            </div>
-            <div id="study-status" class="study-status muted small"></div>
+      <main id="content-host" class="content-host" role="main">
+        <section id="welcome" class="state-panel active">
+          <div class="welcome-card">
+            <h1>New Tab</h1>
+            <p class="muted">Search or type a URL in the address bar.</p>
+            <p class="muted small">Use the OS title-bar buttons (− □ ×) to minimize, maximize, or close. Drag the study splitter to resize panes.</p>
+            <p class="muted small"><button type="button" id="btn-open-study" class="primary-btn">Open study workspace</button></p>
           </div>
-          <div class="study-right">
-            <div class="study-toolbar">
-              <strong>Knowledge document</strong>
-              <button type="button" id="btn-knowledge-clear" class="tool-btn">Clear</button>
-              <button type="button" id="btn-knowledge-export" class="tool-btn">Export MD</button>
-            </div>
-            <div id="study-knowledge" class="study-knowledge" contenteditable="true"></div>
+        </section>
+
+        <section id="settings-panel" class="state-panel" hidden>
+          <div class="settings-card">
+            <h2>Settings</h2>
+            <label class="field">
+              <span>Theme</span>
+              <select id="setting-theme">
+                <option value="aurora-dark">Aurora Dark</option>
+                <option value="aurora-light">Aurora Light</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Search engine</span>
+              <select id="setting-engine">
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="google">Google</option>
+                <option value="bing">Bing</option>
+                <option value="startpage">Startpage</option>
+              </select>
+            </label>
+            <hr />
+            <h3>AI providers</h3>
+            <p class="muted small">Keys stay in localStorage. Full AI wiring in Step 4.</p>
+            <label class="field">
+              <span>Provider preset</span>
+              <select id="setting-ai-preset">
+                <option value="google">Google AI Studio (Gemini)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="groq">Groq</option>
+                <option value="custom">Custom endpoint</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>API key</span>
+              <input id="setting-ai-key" type="password" autocomplete="off" placeholder="paste key" />
+            </label>
+            <label class="field">
+              <span>Endpoint (custom)</span>
+              <input id="setting-ai-endpoint" type="text" placeholder="https://..." />
+            </label>
+            <label class="field">
+              <span>Model</span>
+              <input id="setting-ai-model" type="text" placeholder="gemini-2.0-flash" />
+            </label>
+            <button type="button" id="btn-ai-save" class="primary-btn">Save AI config</button>
+            <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+
+        <section id="stub-panel" class="state-panel" hidden>
+          <div class="welcome-card">
+            <h2 id="stub-title">Coming soon</h2>
+            <p class="muted" id="stub-body">Placeholder.</p>
+            <button type="button" id="btn-stub-back" class="primary-btn">Back</button>
+          </div>
+        </section>
+
+        <section id="study-panel" class="state-panel" hidden>
+          <div class="study-layout" id="study-layout">
+            <div class="study-left" id="study-left">
+              <div class="study-toolbar">
+                <button type="button" id="btn-doc-open" class="primary-btn">Open file…</button>
+                <button type="button" id="btn-doc-paste" class="tool-btn">Paste text</button>
+                <select id="study-doc-list" aria-label="Open documents"></select>
+              </div>
+              <div id="study-source" class="study-source" contenteditable="false" tabindex="0">
+                <p class="muted">Open or paste a document. Drag the middle bar to resize panes.</p>
+              </div>
+              <div class="study-actions">
+                <button type="button" id="btn-transfer-exact" class="tool-btn">Transfer exact</button>
+                <button type="button" id="btn-summarize" class="primary-btn">Summarize &amp; transfer</button>
+                <button type="button" id="btn-chunk-info" class="tool-btn">Chunk info</button>
+              </div>
+              <div id="study-status" class="study-status muted small"></div>
+            </div>
+            <div class="study-splitter" id="study-splitter" title="Drag to resize" role="separator" aria-orientation="vertical"></div>
+            <div class="study-right" id="study-right">
+              <div class="study-toolbar">
+                <strong>Knowledge document</strong>
+                <button type="button" id="btn-knowledge-clear" class="tool-btn">Clear</button>
+                <button type="button" id="btn-knowledge-export" class="tool-btn">Export MD</button>
+              </div>
+              <div id="study-knowledge" class="study-knowledge" contenteditable="true"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   </div>
 
   <script src="/js/bridge.js"></script>

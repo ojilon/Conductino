@@ -17,9 +17,16 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Conductino Study Browser",
-		Width:  1280,
-		Height: 900,
+		Title:            "Conductino Study Browser",
+		Width:            1280,
+		Height:           900,
+		MinWidth:         720,
+		MinHeight:        480,
+		Frameless:        false, // OS title bar: minimize / maximize / close
+		DisableResize:    false, // user can resize the app window
+		Fullscreen:       false,
+		StartHidden:      false,
+		HideWindowOnClose: false,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -32,6 +39,7 @@ func main() {
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 			DisableWindowIcon:   false,
+			Theme:                windows.SystemDefault,
 		},
 	})
 	if err != nil {

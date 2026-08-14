@@ -1,11 +1,11 @@
-/* Study workspace — split knowledge-compression view */
+/* Study workspace — resizable split */
 
 .study-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
+  display: flex;
+  flex-direction: row;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   background: var(--bg);
   color: var(--fg);
 }
@@ -15,11 +15,43 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid var(--border);
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.study-left {
+  flex: 0 0 50%;
+  width: 50%;
 }
 
 .study-right {
-  border-right: none;
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+/* Drag handle between panes */
+.study-splitter {
+  flex: 0 0 6px;
+  width: 6px;
+  cursor: col-resize;
+  background: var(--border);
+  position: relative;
+  z-index: 5;
+  transition: background 0.12s ease;
+}
+
+.study-splitter:hover,
+.study-splitter.dragging {
+  background: var(--accent2);
+}
+
+.study-splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
 }
 
 .study-toolbar {
@@ -30,10 +62,21 @@
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.study-toolbar .primary-btn {
+  margin-top: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .study-toolbar select {
-  max-width: 12rem;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 6rem;
   background: var(--bg);
   color: inherit;
   border: 1px solid var(--border);
@@ -43,13 +86,14 @@
 
 .study-source,
 .study-knowledge {
-  flex: 1;
+  flex: 1 1 auto;
   overflow: auto;
   padding: 0.75rem 1rem;
   white-space: pre-wrap;
   line-height: 1.45;
   font-size: 0.92rem;
   user-select: text;
+  min-height: 0;
 }
 
 .study-source ::selection {
@@ -63,11 +107,20 @@
   padding: 0.5rem 0.75rem;
   border-top: 1px solid var(--border);
   background: var(--bg-elev);
+  flex-shrink: 0;
+}
+
+.study-actions .primary-btn {
+  margin-top: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .study-status {
   padding: 0.35rem 0.75rem 0.6rem;
   min-height: 1.4rem;
+  flex-shrink: 0;
 }
 
 .knowledge-block {
@@ -98,9 +151,21 @@
   border-top: 1px dashed var(--border);
 }
 
-@media (max-width: 900px) {
+/* Stack panes on very narrow windows */
+@media (max-width: 700px) {
   .study-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+    flex-direction: column;
+  }
+  .study-left,
+  .study-right {
+    flex: 1 1 50%;
+    width: 100% !important;
+    min-height: 140px;
+  }
+  .study-splitter {
+    flex-basis: 6px;
+    width: 100%;
+    height: 6px;
+    cursor: row-resize;
   }
 }

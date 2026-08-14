@@ -43,12 +43,22 @@ html,
 body {
   margin: 0;
   height: 100%;
+  width: 100%;
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
   font-size: 13px;
   user-select: none;
+}
+
+/* App column fills the Wails window; OS title bar provides − □ × */
+#app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
 }
 
 button {
@@ -74,12 +84,14 @@ input, select, textarea {
 
 #tabstrip {
   height: var(--tabstrip-h);
+  flex-shrink: 0;
   display: flex;
   align-items: flex-end;
   gap: 4px;
   padding: 4px 8px 0;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+  min-width: 0;
 }
 
 .tabs {
@@ -100,7 +112,7 @@ input, select, textarea {
   align-items: center;
   gap: 8px;
   max-width: 200px;
-  min-width: 80px;
+  min-width: 72px;
   height: 30px;
   padding: 0 10px;
   border-radius: 8px 8px 0 0;
@@ -108,6 +120,7 @@ input, select, textarea {
   color: var(--muted);
   border: 1px solid transparent;
   border-bottom: 0;
+  flex-shrink: 0;
 }
 
 .tab:hover {
@@ -163,12 +176,14 @@ input, select, textarea {
 
 #toolbar {
   height: var(--toolbar-h);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 10px;
+  gap: 6px;
+  padding: 0 8px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
+  min-width: 0;
 }
 
 .nav-group,
@@ -184,6 +199,7 @@ input, select, textarea {
   border-radius: 8px;
   font-size: 14px;
   color: var(--muted);
+  flex-shrink: 0;
 }
 
 .tool-btn:hover:not(:disabled) {
@@ -197,11 +213,11 @@ input, select, textarea {
 }
 
 .omnibox {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  min-width: 80px;
   height: 32px;
   padding: 0 12px;
   background: var(--bg);
@@ -238,8 +254,9 @@ input, select, textarea {
 #workspace {
   position: relative;
   display: flex;
-  height: calc(100% - var(--tabstrip-h) - var(--toolbar-h));
+  flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
 }
 
 .sidebar {
@@ -248,6 +265,7 @@ input, select, textarea {
   top: 0;
   bottom: 0;
   width: var(--sidebar-w);
+  max-width: 85vw;
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -265,6 +283,7 @@ input, select, textarea {
   align-items: center;
   justify-content: space-between;
   padding: 12px 12px 8px;
+  flex-shrink: 0;
 }
 
 .sidebar-header h2 {
@@ -281,6 +300,7 @@ input, select, textarea {
   flex-direction: column;
   gap: 2px;
   padding: 4px 8px;
+  overflow: auto;
 }
 
 .sidebar-item {
@@ -309,6 +329,7 @@ input, select, textarea {
 .content-host {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   background: var(--bg);
   position: relative;
@@ -318,6 +339,7 @@ input, select, textarea {
   display: none;
   height: 100%;
   padding: 0;
+  min-height: 0;
 }
 
 .state-panel.active {
@@ -331,7 +353,8 @@ input, select, textarea {
 #welcome,
 #settings-panel,
 #stub-panel {
-  padding: 32px 24px;
+  padding: 24px 16px;
+  overflow: auto;
 }
 
 #study-panel.active {
@@ -339,13 +362,15 @@ input, select, textarea {
   flex-direction: column;
   height: 100%;
   padding: 0;
+  overflow: hidden;
 }
 
 .welcome-card,
 .settings-card {
   max-width: 520px;
-  margin: 40px auto;
-  padding: 28px;
+  width: 100%;
+  margin: 24px auto;
+  padding: 24px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -394,6 +419,7 @@ input, select, textarea {
   background: var(--bg);
   color: var(--fg);
   font: inherit;
+  max-width: 100%;
 }
 
 .primary-btn {
@@ -414,4 +440,15 @@ hr {
   border: 0;
   border-top: 1px solid var(--border);
   margin: 16px 0;
+}
+
+/* Narrow window: keep toolbar usable */
+@media (max-width: 640px) {
+  .tab {
+    max-width: 120px;
+    min-width: 56px;
+  }
+  .omnibox {
+    min-width: 48px;
+  }
 }
