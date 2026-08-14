@@ -11,6 +11,8 @@
     startpage: { name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s" },
   };
 
+  var AI_STORAGE_KEY = "conductino.ai";
+
   var tabs = [];
   var nextId = 1;
   var activeId = null;
@@ -161,7 +163,17 @@
     });
     var t = activeTab();
     if (t) {
-      t.panel = name === "settings" ? "settings-panel" : name === "stub" ? "stub-panel" : name === "study" ? "study-panel" : name;
+      t.panel =
+        name === "settings"
+          ? "settings-panel"
+          : name === "stub"
+            ? "stub-panel"
+            : name === "study"
+              ? "study-panel"
+              : name;
+    }
+    if (name === "settings" || name === "settings-panel") {
+      fillAiFormFromStorage();
     }
   }
 
@@ -201,7 +213,6 @@
       t.title = url.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
       renderTabs();
     }
-    // Step 3 will bind OpenURL properly; interim uses bridge helper.
     var b = window.ConductinoBridge;
     if (b && b.openURL) b.openURL(url);
     else showStub("Open URL", url);
@@ -220,45 +231,168 @@
     }
   }
 
+  function loadAiConfigs() {
+    try {
+      var raw = localStorage.getItem(AI_STORAGE_KEY);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /** Always replace storage — never merge with a stale first key. */
+  function saveAiConfigs(list) {
+    localStorage.removeItem(AI_STORAGE_KEY);
+    localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(list || []));
+    if (window.ConductinoAI && window.ConductinoAI.setProviders) {
+      window.ConductinoAI.setProviders(list || []);
+    }
+  }
+
+  function maskKey(key) {
+    if (!key) return "(none)";
+    if (key.length <= 8) return "****";
+    return key.slice(0, 4) + "…" + key.slice(-4);
+  }
+
+  function updateAiStatusLine(cfg) {
+    var line = document.getElementById("ai-config-status");
+    if (!line) return;
+    if (!cfg || !cfg.apiKey) {
+      line.textContent = "No API key saved.";
+      return;
+    }
+    line.textContent =
+      "Saved: " +
+      (cfg.name || cfg.id) +
+      " · model " +
+      (cfg.model || "?") +
+      " · key " +
+      maskKey(cfg.apiKey);
+  }
+
+  function googleEndpointForModel(model) {
+    var m = model || "gemini-2.5-flash";
+    return (
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(m) +
+      ":generateContent"
+    );
+  }
+
+  function buildProviderFromForm() {
+    var presetEl = document.getElementById("setting-ai-preset");
+    var keyEl = document.getElementById("setting-ai-key");
+    var endpointEl = document.getElementById("setting-ai-endpoint");
+    var modelEl = document.getElementById("setting-ai-model");
+
+    var preset = (presetEl && presetEl.value) || "google";
+    var key = (keyEl && keyEl.value ? keyEl.value : "").trim();
+    var endpoint = (endpointEl && endpointEl.value ? endpointEl.value : "").trim();
+    var model = (modelEl && modelEl.value ? modelEl.value : "").trim();
+
+    var base = {
+      id: preset,
+      name: preset,
+      apiKey: key,
+      endpoint: endpoint,
+      model: model,
+      style: preset === "google" ? "google" : "openai",
+    };
+
+    if (preset === "google") {
+      base.name = "Google AI Studio";
+      base.model = model || "gemini-2.5-flash";
+      // Always rebuild endpoint from model so old gemini-2.0 URLs are overwritten.
+      base.endpoint = endpoint || googleEndpointForModel(base.model);
+      if (/gemini-2\.0-flash/i.test(base.endpoint) && !endpoint) {
+        base.model = "gemini-2.5-flash";
+        base.endpoint = googleEndpointForModel(base.model);
+      }
+      base.style = "google";
+    } else if (preset === "openrouter") {
+      base.name = "OpenRouter";
+      base.endpoint = endpoint || "https://openrouter.ai/api/v1/chat/completions";
+      base.model = model || "google/gemini-2.5-flash";
+      base.style = "openai";
+    } else if (preset === "groq") {
+      base.name = "Groq";
+      base.endpoint = endpoint || "https://api.groq.com/openai/v1/chat/completions";
+      base.model = model || "llama-3.3-70b-versatile";
+      base.style = "openai";
+    } else {
+      base.name = "Custom";
+      base.style = "openai";
+    }
+
+    return base;
+  }
+
+  function fillAiFormFromStorage() {
+    var list = loadAiConfigs();
+    var cfg = list[0] || null;
+    var presetEl = document.getElementById("setting-ai-preset");
+    var keyEl = document.getElementById("setting-ai-key");
+    var endpointEl = document.getElementById("setting-ai-endpoint");
+    var modelEl = document.getElementById("setting-ai-model");
+
+    if (cfg) {
+      if (presetEl && cfg.id) presetEl.value = cfg.id;
+      if (keyEl) keyEl.value = cfg.apiKey || "";
+      if (endpointEl) endpointEl.value = cfg.endpoint || "";
+      if (modelEl) modelEl.value = cfg.model || "";
+    }
+    updateAiStatusLine(cfg);
+  }
+
   function bindAiSettings() {
     var btn = document.getElementById("btn-ai-save");
-    if (!btn) return;
-    btn.addEventListener("click", function () {
-      var preset = (document.getElementById("setting-ai-preset") || {}).value || "google";
-      var key = ((document.getElementById("setting-ai-key") || {}).value || "").trim();
-      var endpoint = ((document.getElementById("setting-ai-endpoint") || {}).value || "").trim();
-      var model = ((document.getElementById("setting-ai-model") || {}).value || "").trim();
-      var base = {
-        id: preset,
-        name: preset,
-        apiKey: key,
-        endpoint: endpoint,
-        model: model,
-        style: preset === "google" ? "google" : "openai",
-      };
-      if (preset === "google" && !endpoint) {
-        base.endpoint =
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-        base.model = model || "gemini-2.0-flash";
-        base.name = "Google AI Studio";
-      }
-      if (preset === "openrouter" && !endpoint) {
-        base.endpoint = "https://openrouter.ai/api/v1/chat/completions";
-        base.model = model || "google/gemini-2.0-flash-001";
-        base.name = "OpenRouter";
-      }
-      if (preset === "groq" && !endpoint) {
-        base.endpoint = "https://api.groq.com/openai/v1/chat/completions";
-        base.model = model || "llama-3.3-70b-versatile";
-        base.name = "Groq";
-      }
-      if (!base.apiKey || !base.endpoint) {
-        alert("API key and endpoint required");
-        return;
-      }
-      localStorage.setItem("conductino.ai", JSON.stringify([base]));
-      alert("Saved " + base.name);
-    });
+    var btnClear = document.getElementById("btn-ai-clear");
+
+    if (btn) {
+      btn.addEventListener("click", function () {
+        var base = buildProviderFromForm();
+        if (!base.apiKey) {
+          alert("API key required");
+          return;
+        }
+        if (!base.endpoint) {
+          alert("Endpoint required (or pick a preset)");
+          return;
+        }
+        // Full replace — drops any previous keys
+        saveAiConfigs([base]);
+        updateAiStatusLine(base);
+        alert(
+          "Saved " +
+            base.name +
+            "\nModel: " +
+            base.model +
+            "\nKey: " +
+            maskKey(base.apiKey) +
+            "\n\nOld keys were removed."
+        );
+      });
+    }
+
+    if (btnClear) {
+      btnClear.addEventListener("click", function () {
+        if (!confirm("Clear all saved AI keys?")) return;
+        saveAiConfigs([]);
+        var keyEl = document.getElementById("setting-ai-key");
+        var endpointEl = document.getElementById("setting-ai-endpoint");
+        var modelEl = document.getElementById("setting-ai-model");
+        if (keyEl) keyEl.value = "";
+        if (endpointEl) endpointEl.value = "";
+        if (modelEl) modelEl.value = "";
+        updateAiStatusLine(null);
+        alert("AI config cleared.");
+      });
+    }
+
+    fillAiFormFromStorage();
   }
 
   // Events
@@ -300,13 +434,15 @@
   });
 
   var btnStudy = document.getElementById("btn-study");
-  if (btnStudy) btnStudy.addEventListener("click", function () {
-    showPanel("study");
-  });
+  if (btnStudy)
+    btnStudy.addEventListener("click", function () {
+      showPanel("study");
+    });
   var btnOpenStudy = document.getElementById("btn-open-study");
-  if (btnOpenStudy) btnOpenStudy.addEventListener("click", function () {
-    showPanel("study");
-  });
+  if (btnOpenStudy)
+    btnOpenStudy.addEventListener("click", function () {
+      showPanel("study");
+    });
 
   if (el.settingTheme) {
     el.settingTheme.addEventListener("change", function () {

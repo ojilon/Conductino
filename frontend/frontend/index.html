@@ -83,7 +83,8 @@
             </label>
             <hr />
             <h3>AI providers</h3>
-            <p class="muted small">Save a key, then use Summarize in Study. Failover uses first working provider.</p>
+            <p class="muted small" id="ai-config-status">No API key saved.</p>
+            <p class="muted small">Saving replaces any old key. Default Google model: gemini-2.5-flash.</p>
             <label class="field">
               <span>Provider preset</span>
               <select id="setting-ai-preset">
@@ -95,17 +96,18 @@
             </label>
             <label class="field">
               <span>API key</span>
-              <input id="setting-ai-key" type="password" autocomplete="off" placeholder="paste key" />
+              <input id="setting-ai-key" type="password" autocomplete="off" placeholder="paste new key" />
             </label>
             <label class="field">
-              <span>Endpoint (custom)</span>
-              <input id="setting-ai-endpoint" type="text" placeholder="https://..." />
+              <span>Endpoint (optional — auto for presets)</span>
+              <input id="setting-ai-endpoint" type="text" placeholder="leave empty for preset default" />
             </label>
             <label class="field">
               <span>Model</span>
-              <input id="setting-ai-model" type="text" placeholder="gemini-2.0-flash" />
+              <input id="setting-ai-model" type="text" placeholder="gemini-2.5-flash" />
             </label>
             <button type="button" id="btn-ai-save" class="primary-btn">Save AI config</button>
+            <button type="button" id="btn-ai-clear" class="tool-btn" style="margin-top:12px;padding:0 12px;height:36px;border:1px solid var(--border);border-radius:8px;">Clear AI keys</button>
             <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
           </div>
         </section>
