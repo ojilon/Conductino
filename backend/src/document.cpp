@@ -6,7 +6,9 @@
 #include "conductino/core.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -49,7 +51,6 @@ bool is_text_ext(const std::string& ext) {
 }
 
 std::string cache_key_for(const fs::path& path) {
-    // Lightweight stable-ish key from path + size + mtime
     std::error_code ec;
     auto sz = fs::file_size(path, ec);
     auto mt = fs::last_write_time(path, ec);
@@ -98,7 +99,6 @@ CONDUCTINO_API int conductino_document_extract(
     fs::create_directories(cache_dir, ec);
     const fs::path cache_file = cache_dir / (cache_key_for(p) + ".txt");
 
-    // Serve cache when present and newer-or-equal source mtime handled by key.
     std::string cached;
     if (conductino::detail::read_text_file(cache_file, cached) && !cached.empty()) {
         *out_text = dup_string(cached, out_len);
@@ -110,7 +110,6 @@ CONDUCTINO_API int conductino_document_extract(
         if (!conductino::detail::read_text_file(p, body)) {
             return 5;
         }
-        // Basic UTF-8 sanity: strip NULs
         body.erase(std::remove(body.begin(), body.end(), '\0'), body.end());
         conductino::detail::write_text_file(cache_file, body);
         *out_text = dup_string(body, out_len);
@@ -125,13 +124,11 @@ CONDUCTINO_API int conductino_document_extract(
             << "Workaround: export/copy text, or use Paste text in the study workspace.\n"
             << "See backend/features/document/README.md and docs/ai/ARCHITECTURE.md.";
         std::string body = msg.str();
-        // Still cache the notice so repeated opens are instant.
         conductino::detail::write_text_file(cache_file, body);
         *out_text = dup_string(body, out_len);
         return *out_text ? 0 : 4;
     }
 
-    // Unknown binary: refuse rather than dump garbage.
     return 6;
 }
 
@@ -156,7 +153,7 @@ CONDUCTINO_API int conductino_document_import(
     auto now = std::chrono::system_clock::now().time_since_epoch().count();
     std::string name = std::to_string(now) + "_" + src.filename().string();
     for (char& c : name) {
-        if (c == '/' || c == '\\' || c == ':' ) c = '_';
+        if (c == '/' || c == '\\' || c == ':') c = '_';
     }
     fs::path dest = imports / name;
     fs::copy_file(src, dest, fs::copy_options::overwrite_existing, ec);

@@ -68,6 +68,16 @@
     close: function () {
       return call("hostClose");
     },
+    /** Native file dialog → path string (empty if cancelled / unavailable). */
+    openFile: function () {
+      var r = call("hostOpenFile");
+      return typeof r === "string" ? r : "";
+    },
+    /** Extract text from local path via C++ backend (or empty). */
+    extractDocument: function (path) {
+      var r = call("hostExtractDocument", path);
+      return typeof r === "string" ? r : "";
+    },
   };
 
   global.ConductinoBridge = Bridge;
