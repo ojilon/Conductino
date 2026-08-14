@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Conductino Study Browser</title>
   <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/study.css" />
 </head>
 <body>
   <!-- OS title bar carries the app name; no custom titlebar / win controls. -->
@@ -34,6 +35,7 @@
     </form>
 
     <div class="tool-end">
+      <button type="button" id="btn-study" class="tool-btn" title="Study workspace" aria-label="Study workspace">📚</button>
       <button type="button" id="btn-sidebar" class="tool-btn" title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed="false">☰</button>
     </div>
   </div>
@@ -46,6 +48,7 @@
       </div>
       <nav class="sidebar-nav">
         <button type="button" class="sidebar-item" data-action="settings">⚙ Settings</button>
+        <button type="button" class="sidebar-item" data-action="study">📚 Study workspace</button>
         <button type="button" class="sidebar-item" data-action="downloads">⬇ Downloads <span class="stub">soon</span></button>
         <button type="button" class="sidebar-item" data-action="bookmarks">☆ Bookmarks <span class="stub">soon</span></button>
       </nav>
@@ -59,6 +62,7 @@
           <h1>New Tab</h1>
           <p class="muted">Search or type a URL in the address bar.</p>
           <p class="muted small">Remote pages load in the native content surface under this chrome.</p>
+          <p class="muted small"><button type="button" id="btn-open-study" class="primary-btn">Open study workspace</button></p>
         </div>
       </section>
 
@@ -81,6 +85,31 @@
               <option value="startpage">Startpage</option>
             </select>
           </label>
+          <hr />
+          <h3>AI providers</h3>
+          <p class="muted small">Keys stay in localStorage for now. Add one or more; failover uses order.</p>
+          <label class="field">
+            <span>Provider preset</span>
+            <select id="setting-ai-preset">
+              <option value="google">Google AI Studio (Gemini)</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="groq">Groq</option>
+              <option value="custom">Custom endpoint</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>API key</span>
+            <input id="setting-ai-key" type="password" autocomplete="off" placeholder="paste key" />
+          </label>
+          <label class="field">
+            <span>Endpoint (custom)</span>
+            <input id="setting-ai-endpoint" type="text" placeholder="https://..." />
+          </label>
+          <label class="field">
+            <span>Model</span>
+            <input id="setting-ai-model" type="text" placeholder="gemini-2.0-flash" />
+          </label>
+          <button type="button" id="btn-ai-save" class="primary-btn">Save AI config</button>
           <button type="button" id="btn-settings-done" class="primary-btn">Done</button>
         </div>
       </section>
@@ -92,10 +121,44 @@
           <button type="button" id="btn-stub-back" class="primary-btn">Back</button>
         </div>
       </section>
+
+      <!-- Study / knowledge-compression workspace -->
+      <section id="study-panel" class="state-panel" hidden>
+        <div class="study-layout">
+          <div class="study-left">
+            <div class="study-toolbar">
+              <button type="button" id="btn-doc-open" class="primary-btn">Open file…</button>
+              <button type="button" id="btn-doc-paste" class="tool-btn">Paste text</button>
+              <select id="study-doc-list" aria-label="Open documents"></select>
+            </div>
+            <div id="study-source" class="study-source" contenteditable="false" tabindex="0">
+              <p class="muted">Open or paste a document. Select text then use the actions below.</p>
+            </div>
+            <div class="study-actions">
+              <button type="button" id="btn-transfer-exact" class="tool-btn">Transfer exact</button>
+              <button type="button" id="btn-summarize" class="primary-btn">Summarize & transfer</button>
+              <button type="button" id="btn-chunk-info" class="tool-btn">Chunk info</button>
+            </div>
+            <div id="study-status" class="study-status muted small"></div>
+          </div>
+          <div class="study-right">
+            <div class="study-toolbar">
+              <strong>Knowledge document</strong>
+              <button type="button" id="btn-knowledge-clear" class="tool-btn">Clear</button>
+              <button type="button" id="btn-knowledge-export" class="tool-btn">Export MD</button>
+            </div>
+            <div id="study-knowledge" class="study-knowledge" contenteditable="true"></div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
   <script src="js/bridge.js"></script>
+  <script src="../ai/provider.js"></script>
+  <script src="../ai/chunker.js"></script>
+  <script src="../ai/output_parser.js"></script>
+  <script src="js/study.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
