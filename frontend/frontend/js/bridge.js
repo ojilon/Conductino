@@ -12,13 +12,13 @@
     }
   }
 
-  function call(method, arg) {
+  function call(method) {
     var a = app();
     if (!a || typeof a[method] !== "function") {
       return Promise.reject(new Error("binding missing: " + method));
     }
-    if (arguments.length > 1) return a[method](arg);
-    return a[method]();
+    var args = Array.prototype.slice.call(arguments, 1);
+    return a[method].apply(a, args);
   }
 
   var Bridge = {
@@ -33,7 +33,6 @@
     },
     openURL: function (url) {
       return call("OpenURL", url).catch(function () {
-        // Fallback if binding not ready
         var el = document.createElement("a");
         el.href = url;
         el.target = "_blank";
@@ -63,14 +62,53 @@
         return "";
       });
     },
-    windowMinimise: function () {
-      return call("WindowMinimise");
+
+    libraryRoot: function () {
+      return call("LibraryRoot");
     },
-    windowToggleMaximise: function () {
-      return call("WindowToggleMaximise");
+    listLibraryFolders: function () {
+      return call("ListLibraryFolders").then(function (x) {
+        return x || [];
+      });
     },
-    windowClose: function () {
-      return call("WindowClose");
+    createLibraryFolder: function (rel) {
+      return call("CreateLibraryFolder", rel);
+    },
+    listBookmarks: function (folder) {
+      return call("ListBookmarks", folder || "").then(function (x) {
+        return x || [];
+      });
+    },
+    addBookmark: function (folder, url, title) {
+      return call("AddBookmark", folder, url, title || "");
+    },
+    removeBookmark: function (id) {
+      return call("RemoveBookmark", id);
+    },
+    ensureSummary: function (folder) {
+      return call("EnsureSummary", folder);
+    },
+    appendSummary: function (folder, sectionTitle, body) {
+      return call("AppendSummary", folder, sectionTitle || "", body || "");
+    },
+    readSummaryFile: function (relPath) {
+      return call("ReadSummaryFile", relPath);
+    },
+    writeSummaryFile: function (relPath, content) {
+      return call("WriteSummaryFile", relPath, content);
+    },
+    listSummaries: function (folder) {
+      return call("ListSummaries", folder || "").then(function (x) {
+        return x || [];
+      });
+    },
+    mergeSummaryFiles: function (a, b, destFolder, title) {
+      return call("MergeSummaryFiles", a, b, destFolder, title || "");
+    },
+    pickLibraryFolder: function () {
+      return call("PickLibraryFolder").then(function (p) {
+        return typeof p === "string" ? p : "";
+      });
     },
   };
 

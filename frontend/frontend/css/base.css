@@ -17,7 +17,7 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --tabstrip-h: 38px;
   --toolbar-h: 44px;
-  --sidebar-w: 260px;
+  --sidebar-w: 280px;
 }
 
 [data-theme="aurora-light"] {
@@ -52,7 +52,6 @@ body {
   user-select: none;
 }
 
-/* App column fills the Wails window; OS title bar provides − □ × */
 #app-root {
   display: flex;
   flex-direction: column;
@@ -259,9 +258,11 @@ input, select, textarea {
   min-width: 0;
 }
 
+/* Sidebar docks on the RIGHT, under the sidebar toolbar button */
 .sidebar {
   position: absolute;
-  left: 0;
+  right: 0;
+  left: auto;
   top: 0;
   bottom: 0;
   width: var(--sidebar-w);
@@ -270,8 +271,9 @@ input, select, textarea {
   display: flex;
   flex-direction: column;
   background: var(--bg-elev);
-  border-right: 1px solid var(--border);
-  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+  border-left: 1px solid var(--border);
+  border-right: none;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
 }
 
 .sidebar[hidden] {
@@ -352,7 +354,8 @@ input, select, textarea {
 
 #welcome,
 #settings-panel,
-#stub-panel {
+#stub-panel,
+#library-panel {
   padding: 24px 16px;
   overflow: auto;
 }
@@ -366,8 +369,9 @@ input, select, textarea {
 }
 
 .welcome-card,
-.settings-card {
-  max-width: 520px;
+.settings-card,
+.library-card {
+  max-width: 640px;
   width: 100%;
   margin: 24px auto;
   padding: 24px;
@@ -378,13 +382,15 @@ input, select, textarea {
 
 .welcome-card h1,
 .settings-card h2,
+.library-card h2,
 .welcome-card h2 {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 650;
 }
 
-.settings-card h3 {
+.settings-card h3,
+.library-card h3 {
   margin: 12px 0 4px;
   font-size: 14px;
 }
@@ -436,13 +442,58 @@ input, select, textarea {
   filter: brightness(1.08);
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.row-actions .primary-btn {
+  margin-top: 0;
+}
+
+.list-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 200px;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.list-box button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+}
+
+.list-box button:last-child {
+  border-bottom: 0;
+}
+
+.list-box button:hover,
+.list-box button.active {
+  background: var(--bg-elev-2);
+}
+
+.list-box .meta {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 hr {
   border: 0;
   border-top: 1px solid var(--border);
   margin: 16px 0;
 }
 
-/* Narrow window: keep toolbar usable */
 @media (max-width: 640px) {
   .tab {
     max-width: 120px;
