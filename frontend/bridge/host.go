@@ -90,7 +90,6 @@ func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostMaximize", func() { log.Printf("[host] maximize/restore requested") })
 	w.Bind("hostClose", func() { h.destroy() })
 
-	// Sidebar open → inset content so chrome sidebar floats over the page band.
 	w.Bind("hostSidebarOpen", func(open bool) {
 		log.Printf("[host] sidebar open=%v", open)
 		h.shell.SetSidebarOpen(open)
@@ -178,5 +177,28 @@ func (h *Host) Bind(w webview.WebView) {
 	w.Bind("hostShowChrome", func() {
 		h.showChrome()
 		h.PushTabsToChrome()
+	})
+
+	// --- Study / AI tooling ---
+	w.Bind("hostOpenFile", func() string {
+		path, err := OpenFileDialog()
+		if err != nil {
+			log.Printf("[host] openFile: %v", err)
+			return ""
+		}
+		log.Printf("[host] openFile → %q", path)
+		return path
+	})
+
+	w.Bind("hostExtractDocument", func(path string) string {
+		if path == "" {
+			return ""
+		}
+		text, err := NativeDocumentExtract(path)
+		if err != nil {
+			log.Printf("[host] extractDocument %s: %v", path, err)
+			return ""
+		}
+		return text
 	})
 }
