@@ -34,31 +34,49 @@
       </form>
 
       <div class="tool-end">
+        <button type="button" id="btn-bookmark" class="tool-btn" title="Bookmark URL into library folder" aria-label="Bookmark">☆</button>
         <button type="button" id="btn-study" class="tool-btn" title="Study workspace" aria-label="Study workspace">📚</button>
         <button type="button" id="btn-sidebar" class="tool-btn" title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed="false">☰</button>
       </div>
     </div>
 
     <div id="workspace">
-      <aside id="sidebar" class="sidebar" hidden aria-label="Sidebar">
-        <div class="sidebar-header">
-          <h2>Menu</h2>
-          <button type="button" id="btn-sidebar-close" class="tool-btn" title="Close sidebar" aria-label="Close sidebar">×</button>
-        </div>
-        <nav class="sidebar-nav">
-          <button type="button" class="sidebar-item" data-action="settings">⚙ Settings</button>
-          <button type="button" class="sidebar-item" data-action="study">📚 Study workspace</button>
-          <button type="button" class="sidebar-item" data-action="downloads">⬇ Downloads <span class="stub">soon</span></button>
-          <button type="button" class="sidebar-item" data-action="bookmarks">☆ Bookmarks <span class="stub">soon</span></button>
-        </nav>
-      </aside>
-
       <main id="content-host" class="content-host" role="main">
         <section id="welcome" class="state-panel active">
           <div class="welcome-card">
             <h1>New Tab</h1>
-            <p class="muted">Search or type a URL (opens in system browser). Use Study for papers and summaries.</p>
-            <p class="muted small"><button type="button" id="btn-open-study" class="primary-btn">Open study workspace</button></p>
+            <p class="muted">Type a URL (opens system browser). Bookmark papers into Library folders, then Study.</p>
+            <p class="muted small">
+              <button type="button" id="btn-open-library" class="primary-btn">Open library</button>
+              <button type="button" id="btn-open-study" class="primary-btn">Open study</button>
+            </p>
+          </div>
+        </section>
+
+        <section id="library-panel" class="state-panel" hidden>
+          <div class="library-card">
+            <h2>Library</h2>
+            <p class="muted small">Course → topic folders hold bookmarks and a living summary file.</p>
+            <p class="muted small" id="library-status"></p>
+            <div class="row-actions">
+              <button type="button" id="btn-lib-create-folder" class="primary-btn">Create folder…</button>
+              <button type="button" id="btn-lib-refresh" class="tool-btn" style="height:36px;padding:0 12px;border:1px solid var(--border);border-radius:8px;">Refresh</button>
+              <button type="button" id="btn-lib-open-root" class="tool-btn" style="height:36px;padding:0 12px;border:1px solid var(--border);border-radius:8px;">Show on disk</button>
+            </div>
+            <h3>Folders</h3>
+            <div id="library-folder-list" class="list-box"></div>
+            <h3>Bookmarks in folder</h3>
+            <div class="row-actions">
+              <button type="button" id="btn-lib-add-bookmark" class="primary-btn">Add bookmark (omnibox URL)</button>
+            </div>
+            <div id="library-bookmark-list" class="list-box"></div>
+            <h3>Summaries</h3>
+            <div class="row-actions">
+              <button type="button" id="btn-lib-ensure-summary" class="primary-btn">Ensure summary file</button>
+              <button type="button" id="btn-lib-merge" class="tool-btn" style="height:36px;padding:0 12px;border:1px solid var(--border);border-radius:8px;">Merge two…</button>
+            </div>
+            <div id="library-summary-list" class="list-box"></div>
+            <p class="muted small">Click a summary to open it in Study (knowledge pane). Right-click a bookmark to remove.</p>
           </div>
         </section>
 
@@ -134,6 +152,7 @@
               <div class="study-actions">
                 <button type="button" id="btn-transfer-exact" class="tool-btn">Transfer exact</button>
                 <button type="button" id="btn-summarize" class="primary-btn">Summarize &amp; transfer</button>
+                <button type="button" id="btn-summarize-folder" class="primary-btn">Summarize → folder</button>
                 <button type="button" id="btn-chunk-info" class="tool-btn">Chunk info</button>
               </div>
               <div id="study-status" class="study-status muted small"></div>
@@ -144,12 +163,27 @@
                 <strong>Knowledge document</strong>
                 <button type="button" id="btn-knowledge-clear" class="tool-btn">Clear</button>
                 <button type="button" id="btn-knowledge-export" class="tool-btn">Export MD</button>
+                <button type="button" id="btn-knowledge-save-folder" class="tool-btn">Save into folder</button>
               </div>
               <div id="study-knowledge" class="study-knowledge" contenteditable="true"></div>
             </div>
           </div>
         </section>
       </main>
+
+      <aside id="sidebar" class="sidebar" hidden aria-label="Sidebar">
+        <div class="sidebar-header">
+          <h2>Menu</h2>
+          <button type="button" id="btn-sidebar-close" class="tool-btn" title="Close sidebar" aria-label="Close sidebar">×</button>
+        </div>
+        <nav class="sidebar-nav">
+          <button type="button" class="sidebar-item" data-action="library">📁 Library</button>
+          <button type="button" class="sidebar-item" data-action="study">📚 Study workspace</button>
+          <button type="button" class="sidebar-item" data-action="settings">⚙ Settings</button>
+          <button type="button" class="sidebar-item" data-action="downloads">⬇ Downloads <span class="stub">soon</span></button>
+          <button type="button" class="sidebar-item" data-action="bookmarks">☆ Bookmarks <span class="stub">use Library</span></button>
+        </nav>
+      </aside>
     </div>
   </div>
 
@@ -159,5 +193,6 @@
   <script src="/js/ai/output_parser.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/study.js"></script>
+  <script src="/js/library.js"></script>
 </body>
 </html>
