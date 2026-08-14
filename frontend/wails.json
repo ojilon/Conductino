@@ -1,0 +1,32 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Conductino",
+  "outputfilename": "Conductino",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "ojilon",
+    "email": ""
+  },
+  "info": {
+    "companyName": "Conductino",
+    "productName": "Conductino Study Browser",
+    "productVersion": "0.2.0",
+    "copyright": "Copyright 2026",
+    "comments": "Local-first study browser"
+  },
+  "debounceMS": 100,
+  "devServer": "localhost:34115",
+  "appargs": "",
+  "assetdir": "frontend",
+  "reloaddirs": "frontend",
+  "wailsjsdir": "frontend",
+  "windows": {
+    "webviewIsTransparent": false,
+    "windowIsTranslucent": false,
+    "disableWindowIcon": false,
+    "webviewGpuIsDisabled": false
+  }
+}
