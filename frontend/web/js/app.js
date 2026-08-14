@@ -1,6 +1,6 @@
 /**
  * Conductino chrome bootstrap
- * Tabs · navigation · floating sidebar · settings
+ * Tabs · navigation · floating sidebar · settings · study panel routing
  */
 (function () {
   "use strict";
@@ -169,13 +169,14 @@
   }
 
   function showPanel(name) {
-    ["welcome", "settings-panel", "stub-panel"].forEach(function (id) {
+    ["welcome", "settings-panel", "stub-panel", "study-panel"].forEach(function (id) {
       var node = document.getElementById(id);
       if (!node) return;
       var on =
         id === name ||
         (name === "settings" && id === "settings-panel") ||
-        (name === "stub" && id === "stub-panel");
+        (name === "stub" && id === "stub-panel") ||
+        (name === "study" && id === "study-panel");
       node.classList.toggle("active", on);
       if (on) node.removeAttribute("hidden");
       else node.setAttribute("hidden", "");
@@ -236,7 +237,6 @@
       el.sidebar.classList.remove("open");
       el.btnSidebar.setAttribute("aria-pressed", "false");
     }
-    // Shift content popup so sidebar (chrome HTML) is not covered.
     var b = B();
     if (b && b.sidebarOpen) b.sidebarOpen(open);
   }
@@ -291,6 +291,9 @@
       if (action === "settings") {
         showPanel("settings");
         setSidebarOpen(false);
+      } else if (action === "study") {
+        showPanel("study");
+        setSidebarOpen(false);
       } else if (action === "downloads") {
         showStub("Downloads", "Download manager will live here. See docs/GUI.md.");
         setSidebarOpen(false);
@@ -320,6 +323,7 @@
 
   window.ConductinoChrome = {
     applyTabSnapshot: applyTabSnapshot,
+    showPanel: showPanel,
     setTabMeta: function (meta) {
       var active = activeFromSnap();
       if (!active || !meta) return;
