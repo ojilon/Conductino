@@ -1,5 +1,5 @@
 /**
- * Study workspace — file open, paste, transfer, summarize, resizable split.
+ * Study workspace — file open, paste, transfer, summarize, folder append.
  */
 (function () {
   "use strict";
@@ -7,6 +7,7 @@
   var docs = [];
   var activeDocId = null;
   var knowledgeMd = "";
+  var boundSummaryRel = "";
 
   function $(id) {
     return document.getElementById(id);
@@ -92,21 +93,13 @@
       ai.insertBlockIntoDOM(kn, block, { appendCitations: false });
       knowledgeMd = ai.appendBlockToMarkdown(knowledgeMd, block);
     } else {
-      var article = document.createElement("article");
-      article.className = "knowledge-block";
-      var body = document.createElement("div");
-      body.className = "knowledge-block-body";
-      body.setAttribute("contenteditable", "true");
-      body.style.whiteSpace = "pre-wrap";
-      body.textContent = text.trim();
-      article.appendChild(body);
-      kn.appendChild(article);
       knowledgeMd += "\n\n" + text.trim() + "\n";
+      kn.textContent = (kn.textContent || "") + "\n\n" + text.trim();
     }
     status("Transferred exact selection");
   }
 
-  async function summarizeSelectionOrDoc() {
+  async function runSummarize(appendToFolder) {
     var ai = AI();
     if (!ai || !ai.chunkText || !ai.setProviders) {
       status("AI modules not loaded");
@@ -127,13 +120,25 @@
       return;
     }
 
+    var folder = "";
+    if (appendToFolder) {
+      folder =
+        (window.ConductinoLibrary && window.ConductinoLibrary.selectedFolder()) ||
+        window.prompt("Append summary to library folder (e.g. plantphysiology/growth)") ||
+        "";
+      if (!folder) {
+        status("Cancelled — no folder");
+        return;
+      }
+    }
+
     var chunks = ai.chunkText(text, {
       sourceId: doc ? doc.id : "sel",
       targetTokens: 1600,
       maxTokens: 2200,
     });
     var windows = ai.windowsFor(chunks, 6000, 500);
-    status("Summarizing " + chunks.length + " chunk(s) in " + windows.length + " window(s)…");
+    status("Summarizing " + chunks.length + " chunk(s)…");
 
     var system =
       "You are an academic research assistant. Summarise clearly for a university student. " +
@@ -141,34 +146,44 @@
       "Mark key claims with [1], [2] when useful.";
 
     var kn = $("study-knowledge");
+    var combined = "";
     for (var w = 0; w < windows.length; w++) {
       var payload = ai.assemblePayload(windows[w], { instruction: "Summarise the chunks above." });
       try {
         var result = await ai.registry.completeWithFailover({ system: system, user: payload });
-        var pages = windows[w].map(function (c) { return c.approxPage; });
+        var pages = windows[w].map(function (c) {
+          return c.approxPage;
+        });
         var pageRange = pages.length ? [Math.min.apply(null, pages), Math.max.apply(null, pages)] : null;
         var block = ai.makeBlock(result.text, {
           type: "summary",
           sourceId: doc ? doc.id : "sel",
-          chunkIds: windows[w].map(function (c) { return c.id; }),
+          chunkIds: windows[w].map(function (c) {
+            return c.id;
+          }),
           pageRange: pageRange,
           model: (configs[0] && configs[0].model) || "",
           provider: result.providerName || result.providerId,
         });
         if (kn) ai.insertBlockIntoDOM(kn, block, { appendCitations: true });
         knowledgeMd = ai.appendBlockToMarkdown(knowledgeMd, block);
-        status(
-          "Inserted summary from " +
-            result.providerName +
-            " (window " +
-            (w + 1) +
-            "/" +
-            windows.length +
-            ")"
-        );
+        combined += (combined ? "\n\n" : "") + result.text;
+        status("Window " + (w + 1) + "/" + windows.length + " via " + result.providerName);
       } catch (e) {
         status("LLM error: " + (e && e.message ? e.message : String(e)));
         return;
+      }
+    }
+
+    if (folder && combined) {
+      var b = window.ConductinoBridge;
+      var section = (doc && doc.title) || "Summary";
+      try {
+        var ref = await b.appendSummary(folder, section, combined);
+        boundSummaryRel = ref.relPath;
+        status("Appended into " + ref.relPath);
+      } catch (e) {
+        status("Folder append failed: " + e);
       }
     }
   }
@@ -203,10 +218,7 @@
       status("Cancelled");
       return;
     }
-
-    var mode = window.confirm(
-      "OK = Import (copy into app data)\nCancel = Link external path only\n\n" + path
-    );
+    var mode = window.confirm("OK = Import copy\nCancel = Link path only\n\n" + path);
     var storePath = path;
     if (mode && b.importDocument) {
       try {
@@ -214,7 +226,6 @@
         if (imported) storePath = imported;
       } catch (_) {}
     }
-
     status("Extracting…");
     var text = "";
     try {
@@ -223,21 +234,10 @@
       status("Extract error: " + e);
       return;
     }
-    if (!text) {
-      status("No text extracted — try Paste text for PDF/DOCX");
-      addDoc({
-        id: "doc-" + Date.now().toString(36),
-        title: path.split(/[/\\]/).pop() || path,
-        text: "",
-        sourceType: mode ? "import" : "external",
-        pathOrUrl: storePath,
-      });
-      return;
-    }
     addDoc({
       id: "doc-" + Date.now().toString(36),
       title: path.split(/[/\\]/).pop() || path,
-      text: text,
+      text: text || "",
       sourceType: mode ? "import" : "external",
       pathOrUrl: storePath,
     });
@@ -256,11 +256,43 @@
     status("Export started");
   }
 
+  async function saveKnowledgeToFolder() {
+    var b = window.ConductinoBridge;
+    var folder =
+      (window.ConductinoLibrary && window.ConductinoLibrary.selectedFolder()) ||
+      window.prompt("Library folder") ||
+      "";
+    if (!folder || !b) return;
+    var kn = $("study-knowledge");
+    var body = knowledgeMd || (kn && kn.innerText) || "";
+    if (!body.trim()) {
+      status("Knowledge pane empty");
+      return;
+    }
+    try {
+      var ref = await b.appendSummary(folder, "From Study workspace", body);
+      boundSummaryRel = ref.relPath;
+      status("Saved into " + ref.relPath);
+    } catch (e) {
+      status("Save failed: " + e);
+    }
+  }
+
   function clearKnowledge() {
     var kn = $("study-knowledge");
     if (kn) kn.innerHTML = "";
     knowledgeMd = "";
+    boundSummaryRel = "";
     status("Knowledge pane cleared");
+  }
+
+  function loadKnowledgeText(text, relPath) {
+    var kn = $("study-knowledge");
+    if (kn) {
+      kn.textContent = text || "";
+    }
+    knowledgeMd = text || "";
+    boundSummaryRel = relPath || "";
   }
 
   function showChunkInfo() {
@@ -287,7 +319,6 @@
     var splitter = $("study-splitter");
     if (!layout || !left || !splitter) return;
     var dragging = false;
-
     function onMove(clientX, clientY) {
       if (!dragging) return;
       var rect = layout.getBoundingClientRect();
@@ -306,7 +337,6 @@
         left.style.height = "";
       }
     }
-
     splitter.addEventListener("mousedown", function (e) {
       e.preventDefault();
       dragging = true;
@@ -333,18 +363,27 @@
     var paste = $("btn-doc-paste");
     var transfer = $("btn-transfer-exact");
     var summarize = $("btn-summarize");
+    var summarizeFolder = $("btn-summarize-folder");
     var chunk = $("btn-chunk-info");
     var clear = $("btn-knowledge-clear");
     var exp = $("btn-knowledge-export");
+    var saveFolder = $("btn-knowledge-save-folder");
     var list = $("study-doc-list");
 
     if (open) open.addEventListener("click", openFile);
     if (paste) paste.addEventListener("click", pasteText);
     if (transfer) transfer.addEventListener("click", transferExact);
-    if (summarize) summarize.addEventListener("click", summarizeSelectionOrDoc);
+    if (summarize) summarize.addEventListener("click", function () {
+      runSummarize(false);
+    });
+    if (summarizeFolder)
+      summarizeFolder.addEventListener("click", function () {
+        runSummarize(true);
+      });
     if (chunk) chunk.addEventListener("click", showChunkInfo);
     if (clear) clear.addEventListener("click", clearKnowledge);
     if (exp) exp.addEventListener("click", exportMd);
+    if (saveFolder) saveFolder.addEventListener("click", saveKnowledgeToFolder);
     if (list) {
       list.addEventListener("change", function () {
         setActiveDoc(list.value);
@@ -359,5 +398,8 @@
     init();
   }
 
-  window.ConductinoStudy = { addDoc: addDoc };
+  window.ConductinoStudy = {
+    addDoc: addDoc,
+    loadKnowledgeText: loadKnowledgeText,
+  };
 })();

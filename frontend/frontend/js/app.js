@@ -1,5 +1,5 @@
 /**
- * Chrome bootstrap — tabs, omnibox, sidebar, settings (Wails single surface).
+ * Chrome bootstrap — tabs, omnibox, right sidebar, settings, library.
  */
 (function () {
   "use strict";
@@ -148,32 +148,33 @@
     else el.omniboxIcon.textContent = "📄";
   }
 
+  var PANEL_IDS = ["welcome", "settings-panel", "stub-panel", "study-panel", "library-panel"];
+
   function showPanel(name) {
-    ["welcome", "settings-panel", "stub-panel", "study-panel"].forEach(function (id) {
+    PANEL_IDS.forEach(function (id) {
       var node = document.getElementById(id);
       if (!node) return;
       var on =
         id === name ||
         (name === "settings" && id === "settings-panel") ||
         (name === "stub" && id === "stub-panel") ||
-        (name === "study" && id === "study-panel");
+        (name === "study" && id === "study-panel") ||
+        (name === "library" && id === "library-panel");
       node.classList.toggle("active", on);
       if (on) node.removeAttribute("hidden");
       else node.setAttribute("hidden", "");
     });
     var t = activeTab();
     if (t) {
-      t.panel =
-        name === "settings"
-          ? "settings-panel"
-          : name === "stub"
-            ? "stub-panel"
-            : name === "study"
-              ? "study-panel"
-              : name;
+      if (name === "settings") t.panel = "settings-panel";
+      else if (name === "stub") t.panel = "stub-panel";
+      else if (name === "study") t.panel = "study-panel";
+      else if (name === "library") t.panel = "library-panel";
+      else t.panel = name;
     }
-    if (name === "settings" || name === "settings-panel") {
-      fillAiFormFromStorage();
+    if (name === "settings" || name === "settings-panel") fillAiFormFromStorage();
+    if ((name === "library" || name === "library-panel") && window.ConductinoLibrary) {
+      window.ConductinoLibrary.refresh();
     }
   }
 
@@ -242,7 +243,6 @@
     }
   }
 
-  /** Always replace storage — never merge with a stale first key. */
   function saveAiConfigs(list) {
     localStorage.removeItem(AI_STORAGE_KEY);
     localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(list || []));
@@ -265,12 +265,7 @@
       return;
     }
     line.textContent =
-      "Saved: " +
-      (cfg.name || cfg.id) +
-      " · model " +
-      (cfg.model || "?") +
-      " · key " +
-      maskKey(cfg.apiKey);
+      "Saved: " + (cfg.name || cfg.id) + " · model " + (cfg.model || "?") + " · key " + maskKey(cfg.apiKey);
   }
 
   function googleEndpointForModel(model) {
@@ -283,16 +278,10 @@
   }
 
   function buildProviderFromForm() {
-    var presetEl = document.getElementById("setting-ai-preset");
-    var keyEl = document.getElementById("setting-ai-key");
-    var endpointEl = document.getElementById("setting-ai-endpoint");
-    var modelEl = document.getElementById("setting-ai-model");
-
-    var preset = (presetEl && presetEl.value) || "google";
-    var key = (keyEl && keyEl.value ? keyEl.value : "").trim();
-    var endpoint = (endpointEl && endpointEl.value ? endpointEl.value : "").trim();
-    var model = (modelEl && modelEl.value ? modelEl.value : "").trim();
-
+    var preset = (document.getElementById("setting-ai-preset") || {}).value || "google";
+    var key = ((document.getElementById("setting-ai-key") || {}).value || "").trim();
+    var endpoint = ((document.getElementById("setting-ai-endpoint") || {}).value || "").trim();
+    var model = ((document.getElementById("setting-ai-model") || {}).value || "").trim();
     var base = {
       id: preset,
       name: preset,
@@ -301,16 +290,10 @@
       model: model,
       style: preset === "google" ? "google" : "openai",
     };
-
     if (preset === "google") {
       base.name = "Google AI Studio";
       base.model = model || "gemini-2.5-flash";
-      // Always rebuild endpoint from model so old gemini-2.0 URLs are overwritten.
       base.endpoint = endpoint || googleEndpointForModel(base.model);
-      if (/gemini-2\.0-flash/i.test(base.endpoint) && !endpoint) {
-        base.model = "gemini-2.5-flash";
-        base.endpoint = googleEndpointForModel(base.model);
-      }
       base.style = "google";
     } else if (preset === "openrouter") {
       base.name = "OpenRouter";
@@ -326,7 +309,6 @@
       base.name = "Custom";
       base.style = "openai";
     }
-
     return base;
   }
 
@@ -337,7 +319,6 @@
     var keyEl = document.getElementById("setting-ai-key");
     var endpointEl = document.getElementById("setting-ai-endpoint");
     var modelEl = document.getElementById("setting-ai-model");
-
     if (cfg) {
       if (presetEl && cfg.id) presetEl.value = cfg.id;
       if (keyEl) keyEl.value = cfg.apiKey || "";
@@ -350,7 +331,6 @@
   function bindAiSettings() {
     var btn = document.getElementById("btn-ai-save");
     var btnClear = document.getElementById("btn-ai-clear");
-
     if (btn) {
       btn.addEventListener("click", function () {
         var base = buildProviderFromForm();
@@ -362,40 +342,46 @@
           alert("Endpoint required (or pick a preset)");
           return;
         }
-        // Full replace — drops any previous keys
         saveAiConfigs([base]);
         updateAiStatusLine(base);
-        alert(
-          "Saved " +
-            base.name +
-            "\nModel: " +
-            base.model +
-            "\nKey: " +
-            maskKey(base.apiKey) +
-            "\n\nOld keys were removed."
-        );
+        alert("Saved " + base.name + "\nModel: " + base.model + "\nKey: " + maskKey(base.apiKey));
       });
     }
-
     if (btnClear) {
       btnClear.addEventListener("click", function () {
         if (!confirm("Clear all saved AI keys?")) return;
         saveAiConfigs([]);
-        var keyEl = document.getElementById("setting-ai-key");
-        var endpointEl = document.getElementById("setting-ai-endpoint");
-        var modelEl = document.getElementById("setting-ai-model");
-        if (keyEl) keyEl.value = "";
-        if (endpointEl) endpointEl.value = "";
-        if (modelEl) modelEl.value = "";
+        ["setting-ai-key", "setting-ai-endpoint", "setting-ai-model"].forEach(function (id) {
+          var n = document.getElementById(id);
+          if (n) n.value = "";
+        });
         updateAiStatusLine(null);
-        alert("AI config cleared.");
       });
     }
-
     fillAiFormFromStorage();
   }
 
-  // Events
+  async function quickBookmark() {
+    var b = window.ConductinoBridge;
+    if (!b) return;
+    var url = (el.omnibox && el.omnibox.value) || "";
+    url = url.trim();
+    if (!url) {
+      url = window.prompt("URL to bookmark") || "";
+    }
+    if (!url) return;
+    var folder = window.prompt("Library folder (e.g. plantphysiology/growth)");
+    if (!folder) return;
+    try {
+      await b.createLibraryFolder(folder);
+      await b.addBookmark(folder, url, url);
+      alert("Bookmarked into " + folder);
+      if (window.ConductinoLibrary) window.ConductinoLibrary.refresh();
+    } catch (e) {
+      alert("Bookmark failed: " + e);
+    }
+  }
+
   if (el.newTab) el.newTab.addEventListener("click", newTab);
   if (el.omniboxForm) {
     el.omniboxForm.addEventListener("submit", function (e) {
@@ -417,32 +403,23 @@
   document.querySelectorAll(".sidebar-item").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var action = btn.getAttribute("data-action");
-      if (action === "settings") {
-        showPanel("settings");
-        setSidebarOpen(false);
-      } else if (action === "study") {
-        showPanel("study");
-        setSidebarOpen(false);
-      } else if (action === "downloads") {
-        showStub("Downloads", "Coming in a later step.");
-        setSidebarOpen(false);
-      } else if (action === "bookmarks") {
-        showStub("Bookmarks", "Coming in a later step.");
-        setSidebarOpen(false);
-      }
+      if (action === "settings") showPanel("settings");
+      else if (action === "study") showPanel("study");
+      else if (action === "library") showPanel("library");
+      else if (action === "downloads") showStub("Downloads", "Use Library folders → downloads/ (coming next).");
+      else if (action === "bookmarks") showPanel("library");
+      setSidebarOpen(false);
     });
   });
 
   var btnStudy = document.getElementById("btn-study");
-  if (btnStudy)
-    btnStudy.addEventListener("click", function () {
-      showPanel("study");
-    });
+  if (btnStudy) btnStudy.addEventListener("click", function () { showPanel("study"); });
   var btnOpenStudy = document.getElementById("btn-open-study");
-  if (btnOpenStudy)
-    btnOpenStudy.addEventListener("click", function () {
-      showPanel("study");
-    });
+  if (btnOpenStudy) btnOpenStudy.addEventListener("click", function () { showPanel("study"); });
+  var btnOpenLib = document.getElementById("btn-open-library");
+  if (btnOpenLib) btnOpenLib.addEventListener("click", function () { showPanel("library"); });
+  var btnBm = document.getElementById("btn-bookmark");
+  if (btnBm) btnBm.addEventListener("click", quickBookmark);
 
   if (el.settingTheme) {
     el.settingTheme.addEventListener("change", function () {
