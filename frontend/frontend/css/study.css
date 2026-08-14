@@ -1,0 +1,106 @@
+/* Study workspace — split knowledge-compression view */
+
+.study-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.study-left,
+.study-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+
+.study-right {
+  border-right: none;
+}
+
+.study-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.study-toolbar select {
+  max-width: 12rem;
+  background: var(--bg);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+}
+
+.study-source,
+.study-knowledge {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 0.92rem;
+  user-select: text;
+}
+
+.study-source ::selection {
+  background: rgba(80, 160, 255, 0.35);
+}
+
+.study-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.study-status {
+  padding: 0.35rem 0.75rem 0.6rem;
+  min-height: 1.4rem;
+}
+
+.knowledge-block {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.knowledge-block-meta {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.knowledge-block-body {
+  padding: 0.6rem 0.75rem;
+  outline: none;
+  user-select: text;
+}
+
+.knowledge-block-refs {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+@media (max-width: 900px) {
+  .study-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}
