@@ -1,6 +1,5 @@
 /**
- * Thin helpers around Wails runtime + App bindings.
- * window.go.main.App.* is injected by Wails after startup.
+ * Wails JS ↔ Go bridge helpers.
  */
 (function (global) {
   "use strict";
@@ -13,43 +12,65 @@
     }
   }
 
+  function call(method, arg) {
+    var a = app();
+    if (!a || typeof a[method] !== "function") {
+      return Promise.reject(new Error("binding missing: " + method));
+    }
+    if (arguments.length > 1) return a[method](arg);
+    return a[method]();
+  }
+
   var Bridge = {
     ready: function () {
       return !!app();
     },
     greet: function (name) {
-      var a = app();
-      if (!a || !a.Greet) return Promise.resolve("");
-      return a.Greet(name || "");
+      return call("Greet", name || "");
     },
     appInfo: function () {
-      var a = app();
-      if (!a || !a.AppInfo) return Promise.resolve(null);
-      return a.AppInfo();
+      return call("AppInfo");
     },
-    /** Step 3: OpenURL / Navigate / OpenFile will land here. */
     openURL: function (url) {
-      var a = app();
-      if (a && a.OpenURL) return a.OpenURL(url);
-      // Interim: system browser via anchor
-      if (url) {
+      return call("OpenURL", url).catch(function () {
+        // Fallback if binding not ready
         var el = document.createElement("a");
         el.href = url;
         el.target = "_blank";
         el.rel = "noopener";
         el.click();
-      }
-      return Promise.resolve();
+      });
     },
     openFile: function () {
-      var a = app();
-      if (a && a.OpenFile) return a.OpenFile();
-      return Promise.resolve("");
+      return call("OpenFile").then(function (p) {
+        return typeof p === "string" ? p : "";
+      }).catch(function () {
+        return "";
+      });
     },
     extractDocument: function (path) {
-      var a = app();
-      if (a && a.ExtractDocument) return a.ExtractDocument(path);
-      return Promise.resolve("");
+      return call("ExtractDocument", path).then(function (t) {
+        return typeof t === "string" ? t : "";
+      }).catch(function (e) {
+        console.warn("[bridge] extract", e);
+        return "";
+      });
+    },
+    importDocument: function (path) {
+      return call("ImportDocument", path).then(function (p) {
+        return typeof p === "string" ? p : "";
+      }).catch(function () {
+        return "";
+      });
+    },
+    windowMinimise: function () {
+      return call("WindowMinimise");
+    },
+    windowToggleMaximise: function () {
+      return call("WindowToggleMaximise");
+    },
+    windowClose: function () {
+      return call("WindowClose");
     },
   };
 

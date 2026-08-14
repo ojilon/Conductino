@@ -1,5 +1,5 @@
 /**
- * Study workspace — paste/transfer + resizable split.
+ * Study workspace — file open, paste, transfer, resizable split.
  */
 (function () {
   "use strict";
@@ -96,22 +96,50 @@
 
   async function openFile() {
     var b = window.ConductinoBridge;
-    var path = "";
-    if (b && b.openFile) path = await b.openFile();
-    if (!path) {
-      path = window.prompt("File path (native dialog in Step 3). Or use Paste text.", "") || "";
+    if (!b) {
+      status("Bridge not ready");
+      return;
     }
-    if (!path) return;
+    status("Opening file dialog…");
+    var path = "";
+    try {
+      path = await b.openFile();
+    } catch (e) {
+      status("Open failed: " + e);
+      return;
+    }
+    if (!path) {
+      status("Cancelled");
+      return;
+    }
+
+    var mode = window.confirm(
+      "OK = Import (copy into app data)\nCancel = Link external path only\n\n" + path
+    );
+    var storePath = path;
+    if (mode && b.importDocument) {
+      try {
+        var imported = await b.importDocument(path);
+        if (imported) storePath = imported;
+      } catch (_) {}
+    }
+
+    status("Extracting…");
     var text = "";
-    if (b && b.extractDocument) text = await b.extractDocument(path);
+    try {
+      text = await b.extractDocument(path);
+    } catch (e) {
+      status("Extract error: " + e);
+      return;
+    }
     if (!text) {
-      status("Path noted. Extract lands in Step 3 — use Paste text for now.");
+      status("No text extracted — try Paste text for PDF/DOCX");
       addDoc({
         id: "doc-" + Date.now().toString(36),
         title: path.split(/[/\\]/).pop() || path,
         text: "",
-        sourceType: "external",
-        pathOrUrl: path,
+        sourceType: mode ? "import" : "external",
+        pathOrUrl: storePath,
       });
       return;
     }
@@ -119,8 +147,8 @@
       id: "doc-" + Date.now().toString(36),
       title: path.split(/[/\\]/).pop() || path,
       text: text,
-      sourceType: "external",
-      pathOrUrl: path,
+      sourceType: mode ? "import" : "external",
+      pathOrUrl: storePath,
     });
   }
 
@@ -144,7 +172,6 @@
     status("Knowledge pane cleared");
   }
 
-  /** Drag the middle bar to resize left/right study panes. */
   function initSplitter() {
     var layout = $("study-layout");
     var left = $("study-left");
@@ -194,23 +221,14 @@
       document.body.style.userSelect = "";
     });
 
-    // Touch support
-    splitter.addEventListener(
-      "touchstart",
-      function (e) {
-        dragging = true;
-        splitter.classList.add("dragging");
-      },
-      { passive: true }
-    );
-    window.addEventListener(
-      "touchmove",
-      function (e) {
-        if (!dragging || !e.touches[0]) return;
-        onMove(e.touches[0].clientX, e.touches[0].clientY);
-      },
-      { passive: true }
-    );
+    splitter.addEventListener("touchstart", function () {
+      dragging = true;
+      splitter.classList.add("dragging");
+    }, { passive: true });
+    window.addEventListener("touchmove", function (e) {
+      if (!dragging || !e.touches[0]) return;
+      onMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
     window.addEventListener("touchend", function () {
       dragging = false;
       splitter.classList.remove("dragging");

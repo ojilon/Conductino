@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App is the Wails-bound application API.
 type App struct {
-	ctx context.Context
+	ctx     context.Context
+	dataDir string
 }
 
 func NewApp() *App {
@@ -18,6 +22,15 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// Data dir next to working directory (same idea as old conductino-data).
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+	a.dataDir = filepath.Join(cwd, "conductino-data")
+	_ = os.MkdirAll(filepath.Join(a.dataDir, "cache", "docs"), 0o755)
+	_ = os.MkdirAll(filepath.Join(a.dataDir, "imports"), 0o755)
+	NativeInit(a.dataDir)
 }
 
 func (a *App) Greet(name string) string {
@@ -30,12 +43,11 @@ func (a *App) Greet(name string) string {
 func (a *App) AppInfo() map[string]string {
 	return map[string]string{
 		"name":    "Conductino Study Browser",
-		"version": "0.2.0-wails",
+		"version": "0.3.0-wails",
 		"engine":  "wails-v2",
 	}
 }
 
-// WindowMinimise — OS minimize (also available via title-bar).
 func (a *App) WindowMinimise() {
 	if a.ctx == nil {
 		return
@@ -43,7 +55,6 @@ func (a *App) WindowMinimise() {
 	runtime.WindowMinimise(a.ctx)
 }
 
-// WindowToggleMaximise toggles maximize / restore.
 func (a *App) WindowToggleMaximise() {
 	if a.ctx == nil {
 		return
@@ -51,10 +62,120 @@ func (a *App) WindowToggleMaximise() {
 	runtime.WindowToggleMaximise(a.ctx)
 }
 
-// WindowClose quits the application.
 func (a *App) WindowClose() {
 	if a.ctx == nil {
 		return
 	}
 	runtime.Quit(a.ctx)
+}
+
+// OpenURL opens a URL in the system default browser.
+// (In-app embedded browsing can be added later without breaking this API.)
+func (a *App) OpenURL(url string) error {
+	if a.ctx == nil {
+		return fmt.Errorf("app not started")
+	}
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return fmt.Errorf("empty url")
+	}
+	runtime.BrowserOpenURL(a.ctx, url)
+	return nil
+}
+
+// OpenFile shows a native file dialog and returns the selected path (or "").
+func (a *App) OpenFile() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app not started")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Open document",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Documents (txt, md, pdf, docx, json)", Pattern: "*.txt;*.md;*.markdown;*.pdf;*.docx;*.doc;*.json;*.csv;*.tex"},
+			{DisplayName: "All files", Pattern: "*.*"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// ExtractDocument returns plain text for a local path.
+// Prefers C++ backend when available; otherwise reads common text formats in Go.
+func (a *App) ExtractDocument(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("empty path")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return "", err
+	}
+
+	// Optional native C++ extract (cache + binary notice for PDF).
+	if text, err := NativeDocumentExtract(path); err == nil && text != "" {
+		return text, nil
+	}
+
+	return extractTextGo(path)
+}
+
+// ImportDocument copies src into data_dir/imports and returns the new absolute path.
+func (a *App) ImportDocument(src string) (string, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return "", fmt.Errorf("empty path")
+	}
+	if a.dataDir == "" {
+		return "", fmt.Errorf("data dir not ready")
+	}
+	in, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	name := fmt.Sprintf("%d_%s", os.Getpid(), filepath.Base(src))
+	name = strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ':' {
+			return '_'
+		}
+		return r
+	}, name)
+	dest := filepath.Join(a.dataDir, "imports", name)
+	if err := os.WriteFile(dest, in, 0o644); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
+var textExts = map[string]bool{
+	".txt": true, ".md": true, ".markdown": true, ".csv": true, ".tsv": true,
+	".json": true, ".jsonl": true, ".log": true, ".xml": true, ".html": true,
+	".htm": true, ".css": true, ".js": true, ".ts": true, ".py": true,
+	".c": true, ".cpp": true, ".h": true, ".hpp": true, ".go": true,
+	".rs": true, ".java": true, ".yaml": true, ".yml": true, ".toml": true,
+	".ini": true, ".tex": true, ".bib": true,
+}
+
+func extractTextGo(path string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if textExts[ext] || ext == "" {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		// Strip NULs
+		s := string(b)
+		s = strings.ReplaceAll(s, "\x00", "")
+		return s, nil
+	}
+	if ext == ".pdf" || ext == ".docx" || ext == ".doc" {
+		return fmt.Sprintf(
+			"[Conductino] Binary document (%s).\nPath: %s\n\n"+
+				"Full PDF/DOCX extract needs the C++ backend library or an export to text.\n"+
+				"Workaround: copy text from the PDF and use Paste text in Study.\n"+
+				"See backend/features/document/README.md.",
+			ext, path,
+		), nil
+	}
+	return "", fmt.Errorf("unsupported file type: %s", ext)
 }
