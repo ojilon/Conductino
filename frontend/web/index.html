@@ -8,8 +8,6 @@
   <link rel="stylesheet" href="css/study.css" />
 </head>
 <body>
-  <!-- OS title bar carries the app name; no custom titlebar / win controls. -->
-
   <div id="tabstrip" role="tablist" aria-label="Tabs">
     <div id="tabs" class="tabs"></div>
     <button type="button" id="btn-new-tab" class="tab-new" title="New tab" aria-label="New tab">+</button>
@@ -55,7 +53,6 @@
       <div id="sidebar-panel" class="sidebar-panel" hidden></div>
     </aside>
 
-    <!-- Local-only panels. Remote pages paint in the native content WebView2 above this region. -->
     <main id="content-host" class="content-host" role="main">
       <section id="welcome" class="state-panel active">
         <div class="welcome-card">
@@ -87,7 +84,7 @@
           </label>
           <hr />
           <h3>AI providers</h3>
-          <p class="muted small">Keys stay in localStorage for now. Add one or more; failover uses order.</p>
+          <p class="muted small">Keys stay in localStorage. Add one or more; failover uses order.</p>
           <label class="field">
             <span>Provider preset</span>
             <select id="setting-ai-preset">
@@ -122,7 +119,6 @@
         </div>
       </section>
 
-      <!-- Study / knowledge-compression workspace -->
       <section id="study-panel" class="state-panel" hidden>
         <div class="study-layout">
           <div class="study-left">
@@ -155,9 +151,9 @@
   </div>
 
   <script src="js/bridge.js"></script>
-  <script src="../ai/provider.js"></script>
-  <script src="../ai/chunker.js"></script>
-  <script src="../ai/output_parser.js"></script>
+  <script src="js/ai/provider.js"></script>
+  <script src="js/ai/chunker.js"></script>
+  <script src="js/ai/output_parser.js"></script>
   <script src="js/study.js"></script>
   <script src="js/app.js"></script>
 </body>
