@@ -1,50 +1,60 @@
-## Build Instructions
+# Building Conductino
 
-> **Note (restructure branch):** The primary development path is moving to `frontend/` + `backend/`.  
-> The instructions below still cover the older `frontend-ui` + `backend-core` tree.  
-> They will be rewritten once the new skeleton is runnable.
+**Primary path (current):** Wails v2 + vanilla HTML/CSS/JS + optional C++ backend.
 
-### Current (legacy) path
+## Prerequisites (Windows)
 
-#### 1. Prepare C libraries (Zig backend)
+- Go 1.22+
+- WebView2 runtime (usually already installed with Edge)
+- Optional: [Wails CLI](https://wails.io) — `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- Optional: CMake 3.25+ for the C++ `conductino_core` library (PDF/text extract cache)
 
-Download required libraries into `backend-core/third_party/` if you still use it:
+## Run (development)
 
-- SQLite amalgamation: https://sqlite.org/amalgamation.html
-- lexbor (or equivalent HTML parser)
-- ini.h (optional)
-
-#### 2. Build the Zig backend (optional / experimental)
-
-```bash
-cd backend-core
-zig build
-```
-
-#### 3. Run the older Go frontend
-
-```bash
-cd frontend-ui
+```bat
+cd frontend
 go mod tidy
-go run .
-# or
-go build -o conductino
-./conductino
+wails dev
 ```
 
-### Upcoming (restructure)
+Or without the CLI:
 
-```bash
-# Frontend (Go + webview_go)
+```bat
 cd frontend
 go mod tidy
 go run .
-
-# Backend (C++23) — once CMakeLists is in place
-cd backend
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
 ```
 
-Exact flags, dependency list, and packaging steps will be filled in when the corresponding skeleton lands.  
-See `docs/FOUNDATION.md` for the architectural target.
+You should get a normal OS window with tabs, Settings, and Study workspace.
+
+## Build a binary
+
+```bat
+cd frontend
+wails build
+```
+
+Output is under `frontend/build/bin/` (name from `wails.json`: **Conductino**).
+
+## Optional C++ backend
+
+Used for richer document extract/cache when `conductino_core.dll` is found:
+
+```bat
+cd backend
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+Search order for the DLL: `CONDUCTINO_CORE_DIR`, next to the exe, `backend/build`, `backend/build/Release`.
+
+Without the DLL, the app still runs: Go reads `.txt` / `.md` / etc.; PDF shows a clear notice.
+
+## AI keys
+
+Settings → AI providers → paste key → **Save AI config** (replaces any previous key).  
+Default Google model: `gemini-2.5-flash`.
+
+## Retired path
+
+The old `webview_go` dual-surface layout under `frontend/bridge/`, `frontend/shell/`, and `frontend/web/` is **retired**. Do not use it for new work. See `frontend/RETIRED_DUAL_WEBVIEW.md`.

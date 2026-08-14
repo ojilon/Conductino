@@ -1,84 +1,51 @@
 # Conductino Study Browser (Desktop)
 
-**Branch: `restructure`** — foundational rewrite in progress.
+Local-first research / study browser. PC counterpart of [Conductino-Android](https://github.com/ojilon/Conductino-Android).
 
-A modular research / study browser for the desktop.  
-It is the PC counterpart of [Conductino-Android](https://github.com/ojilon/Conductino-Android).
-
-### Stack
+### Stack (current)
 
 | Layer | Technology |
 |-------|------------|
-| Shell & chrome | Go + [webview_go](https://github.com/webview/webview_go) + vanilla HTML/CSS/JS |
-| Content surface | **Native webview** (loads remote pages itself) |
-| Native core | C++23 + CMake (`backend/`) |
-| Experiments | Zig (`backend-core/`, optional) |
+| App shell | **Wails v2** + Go |
+| UI | Vanilla HTML / CSS / JS |
+| Native core (optional) | C++23 + CMake (`backend/`) — document extract/cache, no network |
+| LLMs | API-agnostic JS adapter (Google AI Studio, OpenRouter, Groq, …) |
 
-### Critical design rule
+### Design rules
 
-> The native webview is the only component that talks to the network for page loads.  
-> Go does **not** fetch pages and inject them into an iframe.  
-> The C++ backend does **not** perform network I/O.
+- C++ backend does **not** perform network I/O.
+- LLM calls run in the webview (`fetch`) with local chunking to control tokens.
+- Study workflow: open/paste sources on the left → transfer or summarize into a knowledge document on the right.
 
-This keeps the browser looking like a normal human-driven browser (Cloudflare, anti-bot systems, cookies, redirects, etc. work as expected) and keeps the architecture clean.
+### Quick start
 
-After a page is natively loaded and visible, the app may still inject scripts, extract text, or offer study tools (highlights, notes, reader view, …).
-
----
-
-## Quick links
-
-- Foundation & roadmap → [docs/FOUNDATION.md](docs/FOUNDATION.md)
-- GUI skeleton & extension guide → [docs/GUI.md](docs/GUI.md)
-- Docs index → [docs/README.md](docs/README.md)
-
----
-
-## Project layout (target)
-
-```
-Conductino/
-├── frontend/          # Go + webview_go + HTML/CSS/JS chrome
-├── backend/           # C++23 + CMake (storage, document, … — no network)
-├── backend-core/      # Zig experiments (kept for now)
-├── config/            # search engines, settings schema, …
-├── docs/              # foundation, GUI, themes, …
-├── frontend-ui/       # OLD working tree (to be removed after migration)
-└── …
+```bat
+cd frontend
+go mod tidy
+wails dev
 ```
 
-See [docs/FOUNDATION.md](docs/FOUNDATION.md) for the full map and rules.
+See [BUILDING.md](BUILDING.md) for binary builds and optional C++ backend.
 
----
+### Docs
 
-## Status (restructure)
+- [BUILDING.md](BUILDING.md)
+- [frontend/README.md](frontend/README.md)
+- [docs/ai/ARCHITECTURE.md](docs/ai/ARCHITECTURE.md) — deferred AI features & schemas
+- [docs/ai/PROMPTS.md](docs/ai/PROMPTS.md) — summarizer / verifier prompt templates
+
+### Status
 
 | Area | Status |
 |------|--------|
-| Architecture rules & docs | Done |
-| Chrome-like GUI skeleton | Next |
-| Native webview as sole content surface | Next |
-| Themes (dark/light) + multi search engines | Planned |
-| C++23 backend skeleton | Planned |
-| Migration of useful non-network logic from `frontend-ui` | Planned |
+| Wails window + chrome UI | Working |
+| Study split + resize | Working |
+| File open / text extract | Working (PDF notice until lib linked) |
+| AI summarize + key management | Working |
+| In-app web content (not system browser) | Future |
+| Full PDF extract lib | Future |
+| Verifier / vision / TTS | Documented in `docs/ai/` |
 
----
-
-## Building (will be updated as the skeleton lands)
-
-See [BUILDING.md](BUILDING.md). The old `frontend-ui` instructions still apply for the previous working tree; the new `frontend/` path will be documented as soon as the skeleton runs.
-
----
-
-## Contributing / extending
-
-- Prefer small, focused changes.
-- Add a short README in any new feature directory.
-- Follow the rules in `docs/FOUNDATION.md` (especially the native-webview network rule).
-- GUI extension points are described in `docs/GUI.md`.
-
----
-
-## License
+### License
 
 Add a top-level `LICENSE` when you decide on terms.
