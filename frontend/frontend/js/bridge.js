@@ -40,6 +40,11 @@
         el.click();
       });
     },
+    fetchPageText: function (url) {
+      return call("FetchPageText", url).then(function (t) {
+        return typeof t === "string" ? t : "";
+      });
+    },
     openFile: function () {
       return call("OpenFile").then(function (p) {
         return typeof p === "string" ? p : "";
