@@ -22,7 +22,6 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	// Data dir next to working directory (same idea as old conductino-data).
 	cwd, err := os.Getwd()
 	if err != nil {
 		cwd = "."
@@ -43,7 +42,7 @@ func (a *App) Greet(name string) string {
 func (a *App) AppInfo() map[string]string {
 	return map[string]string{
 		"name":    "Conductino Study Browser",
-		"version": "0.3.0-wails",
+		"version": "0.3.0",
 		"engine":  "wails-v2",
 	}
 }
@@ -70,7 +69,6 @@ func (a *App) WindowClose() {
 }
 
 // OpenURL opens a URL in the system default browser.
-// (In-app embedded browsing can be added later without breaking this API.)
 func (a *App) OpenURL(url string) error {
 	if a.ctx == nil {
 		return fmt.Errorf("app not started")
@@ -102,7 +100,6 @@ func (a *App) OpenFile() (string, error) {
 }
 
 // ExtractDocument returns plain text for a local path.
-// Prefers C++ backend when available; otherwise reads common text formats in Go.
 func (a *App) ExtractDocument(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -111,12 +108,9 @@ func (a *App) ExtractDocument(path string) (string, error) {
 	if _, err := os.Stat(path); err != nil {
 		return "", err
 	}
-
-	// Optional native C++ extract (cache + binary notice for PDF).
 	if text, err := NativeDocumentExtract(path); err == nil && text != "" {
 		return text, nil
 	}
-
 	return extractTextGo(path)
 }
 
@@ -163,7 +157,6 @@ func extractTextGo(path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// Strip NULs
 		s := string(b)
 		s = strings.ReplaceAll(s, "\x00", "")
 		return s, nil
