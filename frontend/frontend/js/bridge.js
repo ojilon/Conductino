@@ -25,11 +25,14 @@
     ready: function () {
       return !!app();
     },
-    greet: function (name) {
-      return call("Greet", name || "");
+    setHomeURL: function (url) {
+      return call("SetHomeURL", url);
     },
-    appInfo: function () {
-      return call("AppInfo");
+    navigate: function (url) {
+      return call("Navigate", url);
+    },
+    goHome: function () {
+      return call("GoHome");
     },
     openURL: function (url) {
       return call("OpenURL", url).catch(function () {
