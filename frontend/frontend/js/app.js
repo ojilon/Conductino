@@ -12,7 +12,6 @@
   };
 
   var AI_STORAGE_KEY = "conductino.ai";
-
   var tabs = [];
   var nextId = 1;
   var activeId = null;
@@ -116,7 +115,7 @@
     renderTabs();
     if (t && t.panel) showPanel(t.panel);
     else showPanel("welcome");
-    if (t && t.url && t.panel === "browser-panel" && window.ConductinoBrowser) {
+    if (t && t.url && (t.panel === "browser-panel" || t.panel === "browser") && window.ConductinoBrowser) {
       window.ConductinoBrowser.navigate(t.url);
     }
   }
@@ -216,6 +215,7 @@
     return eng.url.replace("%s", encodeURIComponent(query));
   }
 
+  /** In-app only — does not open Edge unless user clicks System browser. */
   function navigateTo(input) {
     var raw = (input || "").trim();
     if (!raw) return;
