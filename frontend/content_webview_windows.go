@@ -41,9 +41,10 @@ const (
 	SWP_HIDEWINDOW = 0x0080
 	SW_SHOW        = 5
 	SW_HIDE        = 0
-
-	GWL_WNDPROC = -4
 )
+
+// GWLP_WNDPROC is -4; must pass as int32-width bits into uintptr.
+var gwlpWndProc = uintptr(int32(-4))
 
 var (
 	user32                       = windows.NewLazySystemDLL("user32.dll")
@@ -65,7 +66,6 @@ var (
 	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGetCurrentProcessId = kernel32.NewProc("GetCurrentProcessId")
 	procGetModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
-	procGetCurrentThreadId  = kernel32.NewProc("GetCurrentThreadId")
 
 	ole32              = windows.NewLazySystemDLL("ole32.dll")
 	procCoInitializeEx = ole32.NewProc("CoInitializeEx")
@@ -180,12 +180,26 @@ func subclassParent(hwnd uintptr) error {
 	if subclassed && parentHWND == hwnd {
 		return nil
 	}
-	prev, _, _ := procSetWindowLongPtrW.Call(hwnd, uintptr(uint32(GWL_WNDPROC)), parentSubclassCallback)
+	prev, _, _ := procSetWindowLongPtrW.Call(hwnd, gwlpWndProc, parentSubclassCallback)
 	origWndProc = prev
 	parentHWND = hwnd
 	subclassed = true
 	log.Printf("[content] subclassed parent HWND=%v", hwnd)
 	return nil
+}
+
+func postToUI(msg uint32) {
+	if parentHWND == 0 {
+		return
+	}
+	procPostMessageW.Call(parentHWND, uintptr(msg), 0, 0)
+}
+
+func sendToUI(msg uint32, _ uintptr) {
+	if parentHWND == 0 {
+		return
+	}
+	procSendMessageW.Call(parentHWND, uintptr(msg), 0, 0)
 }
 
 func registerContentClass() error {
@@ -433,7 +447,6 @@ func ensureContentBrowser() (*ContentBrowser, error) {
 	}
 
 	createDone = make(chan error, 1)
-	// SendMessage invokes WndProc on the UI thread (nested if already on UI thread).
 	procSendMessageW.Call(parentHWND, uintptr(wmCreateContent), 0, 0)
 
 	select {
