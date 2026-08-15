@@ -1,28 +1,36 @@
-# In-app browser (real WebView2)
+# Dual webview browser (Windows)
 
-## Model
+## Layout
 
-- **No iframes.** The omnibox navigates the **main WebView2** (`window.location`), the same engine Edge uses.
-- Search words (`leaf`, `tea`) → configured search engine results page.
-- Site names / URLs → the real site (ResearchGate, Cloudflare challenges, etc. work like a normal browser).
-- Study / Library / Settings live on the Conductino **home** surface (asset UI).
+```
+┌─────────────────────────────────────────┐
+│ Tabs + omnibox + tools  (Wails chrome)  │  ← always visible
+├─────────────────────────────────────────┤
+│                                         │
+│   Content WebView2 (child HWND)         │  ← real sites, Cloudflare, etc.
+│                                         │
+└─────────────────────────────────────────┘
+```
 
-## Floating tool bar (on web pages only)
+- **Chrome** never navigates away for browsing.
+- **Content pane** is a second WebView2 embedded under the chrome height (~82px).
+- Opening Study / Library **hides** the content pane so local UI fills the workspace.
 
-After navigation, Conductino injects a small top bar:
+## Tools (chrome toolbar)
 
 | Button | Action |
 |--------|--------|
-| Conductino Home | Back to app UI |
-| Copy selection | Clipboard |
-| Selection → Study | Clipboard + open Study |
-| Summarize selection | Clipboard + Study + summarize |
-| Hide | Remove bar |
+| ✨ | Copy selection from content page → Study + summarize |
+| →📚 | Selection → Study |
+| ☆ | Bookmark current omnibox URL |
+| 📚 | Open Study (hides content pane) |
 
-Tools run **only when you click**. Browsing stays normal.
+## Implementation notes
 
-## Limits
+- `frontend/content_webview_windows.go` — child host HWND + `go-webview2` Chromium
+- `ContentNavigate` / `ContentSetVisible` / `ContentResize` App bindings
+- Non-Windows builds fall back to full-window navigate (`content_webview_stub.go`)
 
-- Chrome (tabs/omnibox) is temporarily replaced by the web page until you press **Conductino Home**.
-- True dual-pane (persistent chrome + content WebView2) needs a native child WebView2 control — future work.
-- Injected bar may appear after 1–3s; click Hide if a site layout conflicts.
+## If content pane fails to create
+
+Check console for `[content] WebView2 ready`. HWND discovery uses the window title containing `Conductino`. Ensure WebView2 runtime is installed.

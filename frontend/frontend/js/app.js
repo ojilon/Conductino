@@ -1,5 +1,5 @@
 /**
- * Chrome bootstrap — tabs, omnibox, real WebView2 navigation, right sidebar.
+ * Chrome bootstrap — persistent tabs/toolbar; content WebView2 below.
  */
 (function () {
   "use strict";
@@ -12,7 +12,6 @@
   };
 
   var AI_STORAGE_KEY = "conductino.ai";
-
   var tabs = [];
   var nextId = 1;
   var activeId = null;
@@ -21,9 +20,6 @@
   var el = {
     tabs: document.getElementById("tabs"),
     newTab: document.getElementById("btn-new-tab"),
-    back: document.getElementById("btn-back"),
-    fwd: document.getElementById("btn-fwd"),
-    reload: document.getElementById("btn-reload"),
     omnibox: document.getElementById("omnibox"),
     omniboxForm: document.getElementById("omnibox-form"),
     omniboxIcon: document.getElementById("omnibox-icon"),
@@ -72,12 +68,9 @@
       btn.type = "button";
       btn.className = "tab" + (tab.id === activeId ? " active" : "");
       btn.setAttribute("role", "tab");
-      btn.dataset.tabId = String(tab.id);
-
       var title = document.createElement("span");
       title.className = "tab-title";
       title.textContent = tab.title || "New Tab";
-
       var close = document.createElement("span");
       close.className = "tab-close";
       close.title = "Close tab";
@@ -86,7 +79,6 @@
         e.stopPropagation();
         closeTab(tab.id);
       });
-
       btn.appendChild(title);
       btn.appendChild(close);
       btn.addEventListener("click", function () {
@@ -94,7 +86,6 @@
       });
       el.tabs.appendChild(btn);
     });
-
     var t = activeTab();
     if (t && el.omnibox) {
       el.omnibox.value = t.url || "";
@@ -112,6 +103,10 @@
     activeId = id;
     var t = activeTab();
     renderTabs();
+    if (t && t.url && t.browsing) {
+      navigateTo(t.url, true);
+      return;
+    }
     if (t && t.panel) showPanel(t.panel);
     else showPanel("welcome");
   }
@@ -120,18 +115,16 @@
     tabs = tabs.filter(function (t) {
       return t.id !== id;
     });
-    if (!tabs.length) {
-      ensureSeed();
-    } else if (activeId === id) {
-      activeId = tabs[0].id;
-    }
+    if (!tabs.length) ensureSeed();
+    else if (activeId === id) activeId = tabs[0].id;
     renderTabs();
     var t = activeTab();
-    showPanel(t && t.panel ? t.panel : "welcome");
+    if (t && t.url && t.browsing) navigateTo(t.url, true);
+    else showPanel(t && t.panel ? t.panel : "welcome");
   }
 
   function newTab() {
-    var t = { id: nextId++, title: "New Tab", url: "", panel: "welcome" };
+    var t = { id: nextId++, title: "New Tab", url: "", panel: "welcome", browsing: false };
     tabs.push(t);
     activeId = t.id;
     renderTabs();
@@ -148,7 +141,18 @@
 
   var PANEL_IDS = ["welcome", "settings-panel", "stub-panel", "study-panel", "library-panel"];
 
+  function setContentVisible(show) {
+    if (window.ConductinoBrowser && window.ConductinoBrowser.setBrowsingMode) {
+      window.ConductinoBrowser.setBrowsingMode(!!show);
+    } else if (window.ConductinoBridge && window.ConductinoBridge.contentSetVisible) {
+      window.ConductinoBridge.contentSetVisible(!!show);
+    }
+  }
+
   function showPanel(name) {
+    // Local panels cover the workspace — hide web content
+    setContentVisible(false);
+
     PANEL_IDS.forEach(function (id) {
       var node = document.getElementById(id);
       if (!node) return;
@@ -164,6 +168,7 @@
     });
     var t = activeTab();
     if (t) {
+      t.browsing = false;
       if (name === "settings") t.panel = "settings-panel";
       else if (name === "stub") t.panel = "stub-panel";
       else if (name === "study") t.panel = "study-panel";
@@ -202,25 +207,32 @@
     return eng.url.replace("%s", encodeURIComponent(query));
   }
 
-  /** Real browser: navigate the main WebView2 (not iframe, not Edge). */
-  function navigateTo(input) {
-    var raw = (input || "").trim();
-    if (!raw) return;
-    var url = looksLikeUrl(raw) ? normalizeUrl(raw) : buildSearchUrl(raw);
+  function navigateTo(input, alreadyUrl) {
+    var url = alreadyUrl ? input : null;
+    if (!url) {
+      var raw = (input || "").trim();
+      if (!raw) return;
+      url = looksLikeUrl(raw) ? normalizeUrl(raw) : buildSearchUrl(raw);
+    }
     var t = activeTab();
     if (t) {
       t.url = url;
       t.title = url.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
+      t.browsing = true;
+      t.panel = "welcome";
       renderTabs();
     }
+    // Hide local panels under content webview
+    PANEL_IDS.forEach(function (id) {
+      var node = document.getElementById(id);
+      if (!node) return;
+      node.classList.remove("active");
+      node.setAttribute("hidden", "");
+    });
+    setContentVisible(true);
     var b = window.ConductinoBridge;
-    if (b && b.navigate) {
-      b.navigate(url);
-    } else if (window.ConductinoBrowser && window.ConductinoBrowser.navigate) {
-      window.ConductinoBrowser.navigate(url);
-    } else {
-      window.location.href = url;
-    }
+    if (b && b.navigate) b.navigate(url);
+    else if (window.ConductinoBrowser) window.ConductinoBrowser.navigate(url);
   }
 
   function setSidebarOpen(open) {
@@ -341,22 +353,18 @@
           return;
         }
         if (!base.endpoint) {
-          alert("Endpoint required (or pick a preset)");
+          alert("Endpoint required");
           return;
         }
         saveAiConfigs([base]);
         updateAiStatusLine(base);
-        alert("Saved " + base.name + "\nModel: " + base.model + "\nKey: " + maskKey(base.apiKey));
+        alert("Saved " + base.name);
       });
     }
     if (btnClear) {
       btnClear.addEventListener("click", function () {
         if (!confirm("Clear all saved AI keys?")) return;
         saveAiConfigs([]);
-        ["setting-ai-key", "setting-ai-endpoint", "setting-ai-model"].forEach(function (id) {
-          var n = document.getElementById(id);
-          if (n) n.value = "";
-        });
         updateAiStatusLine(null);
       });
     }
@@ -368,9 +376,7 @@
     if (!b) return;
     var url = (el.omnibox && el.omnibox.value) || "";
     url = url.trim();
-    if (!url) {
-      url = window.prompt("URL to bookmark") || "";
-    }
+    if (!url) url = window.prompt("URL to bookmark") || "";
     if (!url) return;
     var folder = window.prompt("Library folder (e.g. plantphysiology/growth)");
     if (!folder) return;
@@ -378,7 +384,6 @@
       await b.createLibraryFolder(folder);
       await b.addBookmark(folder, url, url);
       alert("Bookmarked into " + folder);
-      if (window.ConductinoLibrary) window.ConductinoLibrary.refresh();
     } catch (e) {
       alert("Bookmark failed: " + e);
     }
@@ -408,7 +413,7 @@
       if (action === "settings") showPanel("settings");
       else if (action === "study") showPanel("study");
       else if (action === "library") showPanel("library");
-      else if (action === "downloads") showStub("Downloads", "Use Library folders (coming next).");
+      else if (action === "downloads") showStub("Downloads", "Coming next.");
       else if (action === "bookmarks") showPanel("library");
       setSidebarOpen(false);
     });
