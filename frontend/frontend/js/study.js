@@ -401,5 +401,8 @@
   window.ConductinoStudy = {
     addDoc: addDoc,
     loadKnowledgeText: loadKnowledgeText,
+    summarizeNow: function (toFolder) {
+      return runSummarize(!!toFolder);
+    },
   };
 })();
