@@ -33,6 +33,11 @@ var (
 	procEnumWindows              = user32.NewProc("EnumWindows")
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
 	procGetCurrentProcessId      = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetCurrentProcessId")
+
+	// Core Kernel32 DLL handles
+	kernel32                     = windows.NewLazySystemDLL("kernel32.dll")
+	//procGetCurrentProcessId      = kernel32.NewProc("GetCurrentProcessId")
+	procGetModuleHandleW         = kernel32.NewProc("GetModuleHandleW")
 )
 
 type rect struct {
@@ -85,11 +90,15 @@ func registerContentClass() error {
 			err = e
 			return
 		}
-		hInst, e := windows.GetModuleHandle(nil)
-		if e != nil {
-			err = e
+
+		//Direct system call replaces windows.GetModuleHandle(nil)
+		ret, _, callErr := procGetModuleHandleW.Call(0)
+		if ret == 0 {
+			err = fmt.Errorf("GetModuleHandleW failed: %v", callErr)
 			return
 		}
+		hInst := windows.Handle(ret)
+
 		wc := wndClassEx{
 			Size:      uint32(unsafe.Sizeof(wndClassEx{})),
 			WndProc:   syscall.NewCallback(contentWndProc),
@@ -138,12 +147,23 @@ func (c *ContentBrowser) createHost() error {
 	if err := registerContentClass(); err != nil {
 		return err
 	}
-	className, _ := windows.UTF16PtrFromString(contentClassName)
-	windowName, _ := windows.UTF16PtrFromString("ConductinoContent")
-	hInst, err := windows.GetModuleHandle(nil)
+
+	className, err := windows.UTF16PtrFromString(contentClassName)
 	if err != nil {
 		return err
 	}
+	windowName, err := windows.UTF16PtrFromString("ConductinoContent")
+	if err != nil {
+		return err
+	}
+
+	//Direct system call
+	ret, _, callErr := procGetModuleHandleW.Call(0)
+	if ret == 0 {
+		return fmt.Errorf("GetModuleHandleW failed: %v", callErr)
+	}
+	hInst := windows.Handle(ret)
+
 	const (
 		WS_CHILD  = 0x40000000
 		WS_VISIBLE = 0x10000000
