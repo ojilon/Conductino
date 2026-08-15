@@ -5,9 +5,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
@@ -15,10 +18,25 @@ import (
 )
 
 const (
-	defaultChromeHeight = 82 // tabstrip 38 + toolbar 44
-	contentClassName    = "ConductinoContentHost"
-	COINIT_APARTMENTTHREADED = 0x2
-	COINIT_MULTITHREADED     = 0x0
+	defaultChromeHeight       = 82
+	contentClassName          = "ConductinoContentHost"
+	COINIT_APARTMENTTHREADED  = 0x2
+	COINIT_MULTITHREADED      = 0x0
+	WS_CHILD                  = 0x40000000
+	WS_VISIBLE                = 0x10000000
+	WS_CLIPSIBLINGS           = 0x04000000
+	WS_CLIPCHILDREN           = 0x02000000
+	WS_POPUP                  = 0x80000000
+	WS_BORDER                 = 0x00800000
+	WS_EX_TOOLWINDOW          = 0x00000080
+	WS_EX_NOACTIVATE          = 0x08000000
+	SWP_NOZORDER              = 0x0004
+	SWP_NOACTIVATE            = 0x0010
+	SWP_SHOWWINDOW            = 0x0040
+	SWP_HIDEWINDOW            = 0x0080
+	SW_SHOW                   = 5
+	SW_HIDE                   = 0
+	GWLP_HWNDPARENT           = -8
 )
 
 var (
@@ -27,16 +45,18 @@ var (
 	procShowWindow               = user32.NewProc("ShowWindow")
 	procSetWindowPos             = user32.NewProc("SetWindowPos")
 	procGetClientRect            = user32.NewProc("GetClientRect")
+	procClientToScreen           = user32.NewProc("ClientToScreen")
 	procRegisterClassExW         = user32.NewProc("RegisterClassExW")
 	procDefWindowProcW           = user32.NewProc("DefWindowProcW")
 	procGetWindowTextW           = user32.NewProc("GetWindowTextW")
 	procIsWindowVisible          = user32.NewProc("IsWindowVisible")
 	procEnumWindows              = user32.NewProc("EnumWindows")
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
+	procSetWindowLongPtrW       = user32.NewProc("SetWindowLongPtrW")
 
-	kernel32             = windows.NewLazySystemDLL("kernel32.dll")
+	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGetCurrentProcessId = kernel32.NewProc("GetCurrentProcessId")
-	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
+	procGetModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
 
 	ole32              = windows.NewLazySystemDLL("ole32.dll")
 	procCoInitializeEx = ole32.NewProc("CoInitializeEx")
@@ -44,6 +64,10 @@ var (
 
 type rect struct {
 	Left, Top, Right, Bottom int32
+}
+
+type point struct {
+	X, Y int32
 }
 
 type wndClassEx struct {
@@ -66,21 +90,15 @@ var (
 	contentClassAtom uintptr
 	contentMu        sync.Mutex
 	contentBrowser   *ContentBrowser
-	comOnce          sync.Once
 )
 
-// ensureCOM initializes COM on this thread (required for WebView2).
-// S_OK (0) and S_FALSE (1 = already initialized) are both success.
 func ensureCOM() {
-	comOnce.Do(func() {})
 	hr, _, _ := procCoInitializeEx.Call(0, uintptr(COINIT_APARTMENTTHREADED))
-	// RPC_E_CHANGED_MODE = 0x80010106 — already init with different model; try MTA
 	if hr == 0x80010106 {
 		procCoInitializeEx.Call(0, uintptr(COINIT_MULTITHREADED))
 	}
 }
 
-// ContentBrowser hosts a second WebView2 under the chrome strip.
 type ContentBrowser struct {
 	parent   uintptr
 	host     uintptr
@@ -89,6 +107,7 @@ type ContentBrowser struct {
 	visible  bool
 	ready    bool
 	lastURL  string
+	usePopup bool // owned popup instead of pure WS_CHILD
 }
 
 func contentWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
@@ -106,14 +125,13 @@ func registerContentClass() error {
 		}
 		ret, _, callErr := procGetModuleHandleW.Call(0)
 		if ret == 0 {
-			err = fmt.Errorf("GetModuleHandleW failed: %v", callErr)
+			err = fmt.Errorf("GetModuleHandleW: %v", callErr)
 			return
 		}
-		hInst := windows.Handle(ret)
 		wc := wndClassEx{
 			Size:      uint32(unsafe.Sizeof(wndClassEx{})),
 			WndProc:   syscall.NewCallback(contentWndProc),
-			Instance:  hInst,
+			Instance:  windows.Handle(ret),
 			ClassName: name,
 		}
 		atom, _, callErr := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
@@ -153,7 +171,18 @@ func findAppHWND(titleSubstr string) uintptr {
 	return found
 }
 
-func (c *ContentBrowser) createHost() error {
+func contentDataPath() string {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	dir := filepath.Join(base, "Conductino", "content-webview2")
+	_ = os.MkdirAll(dir, 0o755)
+	return dir
+}
+
+// createHost builds a child HWND first; if WebView2 rejects it we recreate as owned popup.
+func (c *ContentBrowser) createHost(asPopup bool) error {
 	if err := registerContentClass(); err != nil {
 		return err
 	}
@@ -167,29 +196,47 @@ func (c *ContentBrowser) createHost() error {
 	}
 	ret, _, callErr := procGetModuleHandleW.Call(0)
 	if ret == 0 {
-		return fmt.Errorf("GetModuleHandleW failed: %v", callErr)
+		return fmt.Errorf("GetModuleHandleW: %v", callErr)
 	}
 	hInst := windows.Handle(ret)
-	const (
-		WS_CHILD        = 0x40000000
-		WS_VISIBLE      = 0x10000000
-		WS_CLIPSIBLINGS = 0x04000000
-	)
+
+	var style, exStyle uintptr
+	var parent uintptr
+	if asPopup {
+		// Owned popup sits above the main window content area (more reliable for 2nd WebView2).
+		style = uintptr(WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN)
+		exStyle = uintptr(WS_EX_TOOLWINDOW)
+		parent = c.parent // owner
+		c.usePopup = true
+	} else {
+		style = uintptr(WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN)
+		exStyle = 0
+		parent = c.parent
+		c.usePopup = false
+	}
+
 	hwnd, _, callErr := procCreateWindowExW.Call(
-		0,
+		exStyle,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(windowName)),
-		uintptr(WS_CHILD|WS_VISIBLE|WS_CLIPSIBLINGS),
-		0, 0, 100, 100,
-		c.parent,
+		style,
+		0, 0, 800, 600, // non-zero initial size (required before Embed)
+		parent,
 		0,
 		uintptr(hInst),
 		0,
 	)
 	if hwnd == 0 {
-		return fmt.Errorf("CreateWindowEx content host: %v", callErr)
+		return fmt.Errorf("CreateWindowEx: %v", callErr)
 	}
 	c.host = hwnd
+
+	// Size + show before WebView2 controller creation.
+	c.visible = true
+	c.layout()
+	procShowWindow.Call(c.host, uintptr(SW_SHOW))
+	// Let the window manager settle.
+	time.Sleep(50 * time.Millisecond)
 	return nil
 }
 
@@ -205,41 +252,61 @@ func (c *ContentBrowser) layout() {
 	}
 	w := rc.Right - rc.Left
 	h := rc.Bottom - rc.Top - top
-	if h < 50 {
-		h = 50
+	if w < 100 {
+		w = 100
 	}
-	const (
-		SWP_NOZORDER   = 0x0004
-		SWP_NOACTIVATE = 0x0010
-		SWP_SHOWWINDOW = 0x0040
-		SWP_HIDEWINDOW = 0x0080
-	)
-	flags := uintptr(SWP_NOZORDER | SWP_NOACTIVATE)
+	if h < 100 {
+		h = 100
+	}
+
+	flags := uintptr(SWP_NOACTIVATE)
 	if c.visible {
 		flags |= SWP_SHOWWINDOW
 	} else {
 		flags |= SWP_HIDEWINDOW
 	}
-	procSetWindowPos.Call(c.host, 0, 0, uintptr(top), uintptr(w), uintptr(h), flags)
+
+	if c.usePopup {
+		// Client (0, top) → screen coords for popup placement.
+		pt := point{X: 0, Y: top}
+		procClientToScreen.Call(c.parent, uintptr(unsafe.Pointer(&pt)))
+		procSetWindowPos.Call(c.host, 0, uintptr(pt.X), uintptr(pt.Y), uintptr(w), uintptr(h), flags)
+	} else {
+		flags |= SWP_NOZORDER
+		procSetWindowPos.Call(c.host, 0, 0, uintptr(top), uintptr(w), uintptr(h), flags)
+	}
 	if c.chromium != nil && c.ready {
 		c.chromium.Resize()
 	}
 }
 
 func (c *ContentBrowser) initChromium() error {
-	// WebView2 requires COM on the creating thread (and callbacks).
 	ensureCOM()
 
 	c.chromium = edge.NewChromium()
-	// Separate user-data folder so we do not clash with the Wails host WebView2 profile.
-	c.chromium.DataPath = "" // library default next to exe is fine; edge uses a subfolder
+	c.chromium.DataPath = contentDataPath()
+	log.Printf("[content] DataPath=%s host=%v popup=%v", c.chromium.DataPath, c.host, c.usePopup)
 
 	if !c.chromium.Embed(c.host) {
-		return fmt.Errorf("content WebView2 Embed failed (COM/UI thread?)")
+		return fmt.Errorf("content WebView2 Embed returned false")
 	}
+
+	// Embed starts async environment+controller creation. Wait briefly for controller.
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+		// Resize is a no-op until controller exists; try Navigate to about:blank as readiness probe.
+		c.chromium.Resize()
+		// Heuristic: if Eval does not panic and Resize ran, mark ready after 400ms min
+		if time.Since(deadline.Add(-8*time.Second)) > 400*time.Millisecond {
+			break
+		}
+	}
+	// Give controller creation callbacks time (error is logged by go-webview2 if it fails).
+	time.Sleep(400 * time.Millisecond)
 	c.chromium.Resize()
 	c.ready = true
-	log.Printf("[content] WebView2 ready on child host")
+	log.Printf("[content] WebView2 Embed finished (check logs for controller errors)")
 	return nil
 }
 
@@ -252,7 +319,7 @@ func (c *ContentBrowser) Navigate(url string) error {
 		!strings.HasPrefix(url, "about:") {
 		url = "https://" + url
 	}
-	if !c.ready {
+	if !c.ready || c.chromium == nil {
 		return fmt.Errorf("content browser not ready")
 	}
 	c.lastURL = url
@@ -266,12 +333,10 @@ func (c *ContentBrowser) SetVisible(v bool) {
 	c.visible = v
 	c.layout()
 	if c.host != 0 {
-		const SW_SHOW = 5
-		const SW_HIDE = 0
 		if v {
-			procShowWindow.Call(c.host, SW_SHOW)
+			procShowWindow.Call(c.host, uintptr(SW_SHOW))
 		} else {
-			procShowWindow.Call(c.host, SW_HIDE)
+			procShowWindow.Call(c.host, uintptr(SW_HIDE))
 		}
 	}
 }
@@ -282,9 +347,7 @@ func (c *ContentBrowser) Eval(js string) {
 	}
 }
 
-func (c *ContentBrowser) LastURL() string {
-	return c.lastURL
-}
+func (c *ContentBrowser) LastURL() string { return c.lastURL }
 
 func ensureContentBrowser() (*ContentBrowser, error) {
 	contentMu.Lock()
@@ -297,20 +360,59 @@ func ensureContentBrowser() (*ContentBrowser, error) {
 	if hwnd == 0 {
 		return nil, fmt.Errorf("app window HWND not found")
 	}
-	cb := &ContentBrowser{
-		parent:  hwnd,
-		chromeH: defaultChromeHeight,
-		visible: false,
+
+	try := func(asPopup bool) (*ContentBrowser, error) {
+		cb := &ContentBrowser{
+			parent:  hwnd,
+			chromeH: defaultChromeHeight,
+			visible: false,
+		}
+		if err := cb.createHost(asPopup); err != nil {
+			return nil, err
+		}
+		if err := cb.initChromium(); err != nil {
+			return nil, err
+		}
+		cb.SetVisible(false)
+		return cb, nil
 	}
-	if err := cb.createHost(); err != nil {
-		return nil, err
+
+	// Prefer true child first (integrated layout).
+	cb, err := try(false)
+	if err != nil {
+		log.Printf("[content] child host failed: %v — trying owned popup", err)
+		cb, err = try(true)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err := cb.initChromium(); err != nil {
-		return nil, err
-	}
-	cb.SetVisible(false)
+	// If child path "succeeded" Embed but controller error was only logged, user may still see blank.
+	// Second attempt with popup is available via ContentRecreateAsPopup if needed.
 	contentBrowser = cb
 	return cb, nil
+}
+
+// ContentRecreateAsPopup forces owned-popup content surface (call if child path is blank).
+func (a *App) ContentRecreateAsPopup() error {
+	contentMu.Lock()
+	contentBrowser = nil
+	contentMu.Unlock()
+	ensureCOM()
+	hwnd := findAppHWND("Conductino")
+	if hwnd == 0 {
+		return fmt.Errorf("app window HWND not found")
+	}
+	cb := &ContentBrowser{parent: hwnd, chromeH: defaultChromeHeight}
+	if err := cb.createHost(true); err != nil {
+		return err
+	}
+	if err := cb.initChromium(); err != nil {
+		return err
+	}
+	contentMu.Lock()
+	contentBrowser = cb
+	contentMu.Unlock()
+	return nil
 }
 
 func (a *App) ContentEnsure() error {
