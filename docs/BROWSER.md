@@ -1,36 +1,30 @@
-# Dual webview browser (Windows)
+# Browser model (current)
 
-## Layout
+## Working path (default)
 
-```
-┌─────────────────────────────────────────┐
-│ Tabs + omnibox + tools  (Wails chrome)  │  ← always visible
-├─────────────────────────────────────────┤
-│                                         │
-│   Content WebView2 (child HWND)         │  ← real sites, Cloudflare, etc.
-│                                         │
-└─────────────────────────────────────────┘
-```
+- Omnibox navigates the **main WebView2** (same engine as Edge).
+- Real sites work: DuckDuckGo, ResearchGate, Cloudflare, etc.
+- A **floating tool bar** is injected on web pages:
+  - Conductino Home
+  - Copy selection
+  - Selection → Study
+  - Summarize selection
+  - Hide
+- Tools run **only when you click them**.
 
-- **Chrome** never navigates away for browsing.
-- **Content pane** is a second WebView2 embedded under the chrome height (~82px).
-- Opening Study / Library **hides** the content pane so local UI fills the workspace.
+## Dual chrome + content WebView2 (deferred)
 
-## Tools (chrome toolbar)
+Code lives in `content_webview_windows.go` but is **disabled** (`useDualContent = false` in `navigate.go`).
 
-| Button | Action |
-|--------|--------|
-| ✨ | Copy selection from content page → Study + summarize |
-| →📚 | Selection → Study |
-| ☆ | Bookmark current omnibox URL |
-| 📚 | Open Study (hides content pane) |
+Why deferred:
+- Second WebView2 controller often fails or shows a blank pane when created from Wails binding threads (`0x8007139F` / empty surface).
+- Needs create-on-UI-thread via `PostMessage` subclassing of the parent HWND — non-trivial native work.
 
-## Implementation notes
+### Future enable steps (for you or a later session)
 
-- `frontend/content_webview_windows.go` — child host HWND + `go-webview2` Chromium
-- `ContentNavigate` / `ContentSetVisible` / `ContentResize` App bindings
-- Non-Windows builds fall back to full-window navigate (`content_webview_stub.go`)
+1. Subclass parent HWND; handle `WM_APP+N` to create child host + `Embed` on the UI thread.
+2. Unique DataPath (already set under `%LocalAppData%\Conductino\content-webview2`).
+3. Set `useDualContent = true` in `navigate.go` when controller creation is reliable.
+4. Keep chrome height sync via `ContentSetChromeHeight`.
 
-## If content pane fails to create
-
-Check console for `[content] WebView2 ready`. HWND discovery uses the window title containing `Conductino`. Ensure WebView2 runtime is installed.
+Until then, full-window navigate + floating bar is the production path for study use.
