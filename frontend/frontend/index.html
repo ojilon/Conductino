@@ -6,7 +6,6 @@
   <title>Conductino Study Browser</title>
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/study.css" />
-  <link rel="stylesheet" href="/css/browser.css" />
 </head>
 <body>
   <div id="app-root">
@@ -46,24 +45,13 @@
         <section id="welcome" class="state-panel active">
           <div class="welcome-card">
             <h1>New Tab</h1>
-            <p class="muted">Type a URL in the address bar — pages open <strong>inside</strong> Conductino.</p>
-            <p class="muted small">If a site shows blank (blocks embed), use <em>Fetch page text</em> or system browser from the browser toolbar.</p>
+            <p class="muted">Type a search or URL — pages open in this window (real WebView2, like Edge).</p>
+            <p class="muted small">A floating <strong>Conductino</strong> bar appears on web pages: Home, Copy selection, Study, Summarize. Tools only run when you click them.</p>
             <p class="muted small">
               <button type="button" id="btn-open-library" class="primary-btn">Open library</button>
               <button type="button" id="btn-open-study" class="primary-btn">Open study</button>
             </p>
           </div>
-        </section>
-
-        <section id="browser-panel" class="state-panel" hidden>
-          <div class="browser-toolbar">
-            <button type="button" id="btn-browser-to-study" class="tool-btn" title="Selection or clipboard → Study">→ Study</button>
-            <button type="button" id="btn-browser-summarize" class="primary-btn" title="Selection/clipboard → Study + summarize">Summarize selection</button>
-            <button type="button" id="btn-browser-fetch" class="tool-btn" title="Download page HTML as text into Study">Fetch page text</button>
-            <button type="button" id="btn-browser-external" class="tool-btn" title="Open in system browser">System browser</button>
-          </div>
-          <iframe id="browser-frame" title="In-app browser" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"></iframe>
-          <div id="browser-status" class="browser-status muted">In-app browser ready</div>
         </section>
 
         <section id="library-panel" class="state-panel" hidden>
@@ -89,7 +77,6 @@
               <button type="button" id="btn-lib-merge" class="tool-btn" style="height:36px;padding:0 12px;border:1px solid var(--border);border-radius:8px;">Merge two…</button>
             </div>
             <div id="library-summary-list" class="list-box"></div>
-            <p class="muted small">Click a summary to open it in Study. Right-click a bookmark to remove.</p>
           </div>
         </section>
 
@@ -115,7 +102,6 @@
             <hr />
             <h3>AI providers</h3>
             <p class="muted small" id="ai-config-status">No API key saved.</p>
-            <p class="muted small">Saving replaces any old key. Default Google model: gemini-2.5-flash.</p>
             <label class="field">
               <span>Provider preset</span>
               <select id="setting-ai-preset">
@@ -130,7 +116,7 @@
               <input id="setting-ai-key" type="password" autocomplete="off" placeholder="paste new key" />
             </label>
             <label class="field">
-              <span>Endpoint (optional — auto for presets)</span>
+              <span>Endpoint (optional)</span>
               <input id="setting-ai-endpoint" type="text" placeholder="leave empty for preset default" />
             </label>
             <label class="field">
@@ -160,7 +146,7 @@
                 <select id="study-doc-list" aria-label="Open documents"></select>
               </div>
               <div id="study-source" class="study-source" contenteditable="false" tabindex="0">
-                <p class="muted">Open or paste a document. Select text, then Transfer or Summarize.</p>
+                <p class="muted">Open, paste, or send a selection from the web floating bar.</p>
               </div>
               <div class="study-actions">
                 <button type="button" id="btn-transfer-exact" class="tool-btn">Transfer exact</button>

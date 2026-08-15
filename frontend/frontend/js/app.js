@@ -1,5 +1,5 @@
 /**
- * Chrome bootstrap — tabs, omnibox, in-app browser, right sidebar.
+ * Chrome bootstrap — tabs, omnibox, real WebView2 navigation, right sidebar.
  */
 (function () {
   "use strict";
@@ -12,6 +12,7 @@
   };
 
   var AI_STORAGE_KEY = "conductino.ai";
+
   var tabs = [];
   var nextId = 1;
   var activeId = null;
@@ -99,8 +100,6 @@
       el.omnibox.value = t.url || "";
       updateOmniboxIcon(t.url);
     }
-    if (el.back) el.back.disabled = true;
-    if (el.fwd) el.fwd.disabled = true;
   }
 
   function ensureSeed() {
@@ -115,9 +114,6 @@
     renderTabs();
     if (t && t.panel) showPanel(t.panel);
     else showPanel("welcome");
-    if (t && t.url && (t.panel === "browser-panel" || t.panel === "browser") && window.ConductinoBrowser) {
-      window.ConductinoBrowser.navigate(t.url);
-    }
   }
 
   function closeTab(id) {
@@ -150,14 +146,7 @@
     else el.omniboxIcon.textContent = "📄";
   }
 
-  var PANEL_IDS = [
-    "welcome",
-    "settings-panel",
-    "stub-panel",
-    "study-panel",
-    "library-panel",
-    "browser-panel",
-  ];
+  var PANEL_IDS = ["welcome", "settings-panel", "stub-panel", "study-panel", "library-panel"];
 
   function showPanel(name) {
     PANEL_IDS.forEach(function (id) {
@@ -168,8 +157,7 @@
         (name === "settings" && id === "settings-panel") ||
         (name === "stub" && id === "stub-panel") ||
         (name === "study" && id === "study-panel") ||
-        (name === "library" && id === "library-panel") ||
-        (name === "browser" && id === "browser-panel");
+        (name === "library" && id === "library-panel");
       node.classList.toggle("active", on);
       if (on) node.removeAttribute("hidden");
       else node.setAttribute("hidden", "");
@@ -180,7 +168,6 @@
       else if (name === "stub") t.panel = "stub-panel";
       else if (name === "study") t.panel = "study-panel";
       else if (name === "library") t.panel = "library-panel";
-      else if (name === "browser") t.panel = "browser-panel";
       else t.panel = name;
     }
     if (name === "settings" || name === "settings-panel") fillAiFormFromStorage();
@@ -215,7 +202,7 @@
     return eng.url.replace("%s", encodeURIComponent(query));
   }
 
-  /** In-app only — does not open Edge unless user clicks System browser. */
+  /** Real browser: navigate the main WebView2 (not iframe, not Edge). */
   function navigateTo(input) {
     var raw = (input || "").trim();
     if (!raw) return;
@@ -224,15 +211,15 @@
     if (t) {
       t.url = url;
       t.title = url.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
-      t.panel = "browser-panel";
       renderTabs();
     }
-    if (window.ConductinoBrowser && window.ConductinoBrowser.navigate) {
+    var b = window.ConductinoBridge;
+    if (b && b.navigate) {
+      b.navigate(url);
+    } else if (window.ConductinoBrowser && window.ConductinoBrowser.navigate) {
       window.ConductinoBrowser.navigate(url);
     } else {
-      showPanel("browser");
-      var f = document.getElementById("browser-frame");
-      if (f) f.src = url;
+      window.location.href = url;
     }
   }
 
@@ -240,11 +227,9 @@
     if (!el.sidebar) return;
     if (open) {
       el.sidebar.removeAttribute("hidden");
-      el.sidebar.classList.add("open");
       if (el.btnSidebar) el.btnSidebar.setAttribute("aria-pressed", "true");
     } else {
       el.sidebar.setAttribute("hidden", "");
-      el.sidebar.classList.remove("open");
       if (el.btnSidebar) el.btnSidebar.setAttribute("aria-pressed", "false");
     }
   }
@@ -406,18 +391,6 @@
       navigateTo(el.omnibox.value);
     });
   }
-  if (el.reload) {
-    el.reload.addEventListener("click", function () {
-      var f = document.getElementById("browser-frame");
-      var t = activeTab();
-      if (f && t && t.url) {
-        f.src = t.url;
-        showPanel("browser");
-      } else if (f && f.src) {
-        f.src = f.src;
-      }
-    });
-  }
   if (el.btnSidebar) {
     el.btnSidebar.addEventListener("click", function () {
       setSidebarOpen(el.sidebar.hasAttribute("hidden"));
@@ -435,7 +408,7 @@
       if (action === "settings") showPanel("settings");
       else if (action === "study") showPanel("study");
       else if (action === "library") showPanel("library");
-      else if (action === "downloads") showStub("Downloads", "Use Library folders → downloads/ (coming next).");
+      else if (action === "downloads") showStub("Downloads", "Use Library folders (coming next).");
       else if (action === "bookmarks") showPanel("library");
       setSidebarOpen(false);
     });
