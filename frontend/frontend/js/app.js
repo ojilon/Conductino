@@ -1,5 +1,5 @@
 /**
- * Chrome bootstrap — tabs, omnibox, right sidebar, settings, library.
+ * Chrome bootstrap — tabs, omnibox, in-app browser, right sidebar.
  */
 (function () {
   "use strict";
@@ -116,6 +116,9 @@
     renderTabs();
     if (t && t.panel) showPanel(t.panel);
     else showPanel("welcome");
+    if (t && t.url && t.panel === "browser-panel" && window.ConductinoBrowser) {
+      window.ConductinoBrowser.navigate(t.url);
+    }
   }
 
   function closeTab(id) {
@@ -148,7 +151,14 @@
     else el.omniboxIcon.textContent = "📄";
   }
 
-  var PANEL_IDS = ["welcome", "settings-panel", "stub-panel", "study-panel", "library-panel"];
+  var PANEL_IDS = [
+    "welcome",
+    "settings-panel",
+    "stub-panel",
+    "study-panel",
+    "library-panel",
+    "browser-panel",
+  ];
 
   function showPanel(name) {
     PANEL_IDS.forEach(function (id) {
@@ -159,7 +169,8 @@
         (name === "settings" && id === "settings-panel") ||
         (name === "stub" && id === "stub-panel") ||
         (name === "study" && id === "study-panel") ||
-        (name === "library" && id === "library-panel");
+        (name === "library" && id === "library-panel") ||
+        (name === "browser" && id === "browser-panel");
       node.classList.toggle("active", on);
       if (on) node.removeAttribute("hidden");
       else node.setAttribute("hidden", "");
@@ -170,6 +181,7 @@
       else if (name === "stub") t.panel = "stub-panel";
       else if (name === "study") t.panel = "study-panel";
       else if (name === "library") t.panel = "library-panel";
+      else if (name === "browser") t.panel = "browser-panel";
       else t.panel = name;
     }
     if (name === "settings" || name === "settings-panel") fillAiFormFromStorage();
@@ -212,11 +224,16 @@
     if (t) {
       t.url = url;
       t.title = url.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
+      t.panel = "browser-panel";
       renderTabs();
     }
-    var b = window.ConductinoBridge;
-    if (b && b.openURL) b.openURL(url);
-    else showStub("Open URL", url);
+    if (window.ConductinoBrowser && window.ConductinoBrowser.navigate) {
+      window.ConductinoBrowser.navigate(url);
+    } else {
+      showPanel("browser");
+      var f = document.getElementById("browser-frame");
+      if (f) f.src = url;
+    }
   }
 
   function setSidebarOpen(open) {
@@ -387,6 +404,18 @@
     el.omniboxForm.addEventListener("submit", function (e) {
       e.preventDefault();
       navigateTo(el.omnibox.value);
+    });
+  }
+  if (el.reload) {
+    el.reload.addEventListener("click", function () {
+      var f = document.getElementById("browser-frame");
+      var t = activeTab();
+      if (f && t && t.url) {
+        f.src = t.url;
+        showPanel("browser");
+      } else if (f && f.src) {
+        f.src = f.src;
+      }
     });
   }
   if (el.btnSidebar) {
