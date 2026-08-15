@@ -43,8 +43,11 @@ const (
 	SW_HIDE        = 0
 )
 
-// GWLP_WNDPROC is -4; must pass as int32-width bits into uintptr.
-var gwlpWndProc = uintptr(int32(-4))
+// match exactly 32-bit width bits 
+// without introducing a 64-bit sign-extension mask, convert via uint32 first.
+var signedMinusFour int32 = -4
+var gwlpWndProc = uintptr(uint32(signedMinusFour)) // Evaluated at runtime; no compiler error
+
 
 var (
 	user32                       = windows.NewLazySystemDLL("user32.dll")
