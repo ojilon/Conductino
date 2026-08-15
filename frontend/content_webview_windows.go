@@ -43,10 +43,9 @@ const (
 	SW_HIDE        = 0
 )
 
-// match exactly 32-bit width bits 
-// without introducing a 64-bit sign-extension mask, convert via uint32 first.
-var signedMinusFour int32 = -4
-var gwlpWndProc = uintptr(uint32(signedMinusFour)) // Evaluated at runtime; no compiler error
+// GWLP_WNDPROC index (-4). Convert via int32 to uintptr to preserve negative index value.
+const GWLP_WNDPROC = -4
+var gwlpWndProc = uintptr(int32(GWLP_WNDPROC))
 
 
 var (
@@ -64,7 +63,6 @@ var (
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
 	procSetWindowLongPtrW        = user32.NewProc("SetWindowLongPtrW")
 	procPostMessageW             = user32.NewProc("PostMessageW")
-	procSendMessageW             = user32.NewProc("SendMessageW")
 
 	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGetCurrentProcessId = kernel32.NewProc("GetCurrentProcessId")
@@ -199,10 +197,13 @@ func postToUI(msg uint32) {
 }
 
 func sendToUI(msg uint32, _ uintptr) {
+	// Use PostMessage to avoid nested message-pump re-entrancy and COM initialization
+	// issues that can happen with SendMessage. The handlers use createDone/navDone
+	// to signal completion.
 	if parentHWND == 0 {
 		return
 	}
-	procSendMessageW.Call(parentHWND, uintptr(msg), 0, 0)
+	procPostMessageW.Call(parentHWND, uintptr(msg), 0, 0)
 }
 
 func registerContentClass() error {
@@ -450,7 +451,7 @@ func ensureContentBrowser() (*ContentBrowser, error) {
 	}
 
 	createDone = make(chan error, 1)
-	procSendMessageW.Call(parentHWND, uintptr(wmCreateContent), 0, 0)
+	procPostMessageW.Call(parentHWND, uintptr(wmCreateContent), 0, 0)
 
 	select {
 	case err := <-createDone:
