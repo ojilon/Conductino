@@ -17,12 +17,13 @@ import (
 const (
 	defaultChromeHeight = 82 // tabstrip 38 + toolbar 44
 	contentClassName    = "ConductinoContentHost"
+	COINIT_APARTMENTTHREADED = 0x2
+	COINIT_MULTITHREADED     = 0x0
 )
 
 var (
 	user32                       = windows.NewLazySystemDLL("user32.dll")
 	procCreateWindowExW          = user32.NewProc("CreateWindowExW")
-	procDestroyWindow            = user32.NewProc("DestroyWindow")
 	procShowWindow               = user32.NewProc("ShowWindow")
 	procSetWindowPos             = user32.NewProc("SetWindowPos")
 	procGetClientRect            = user32.NewProc("GetClientRect")
@@ -32,12 +33,13 @@ var (
 	procIsWindowVisible          = user32.NewProc("IsWindowVisible")
 	procEnumWindows              = user32.NewProc("EnumWindows")
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
-	procGetCurrentProcessId      = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetCurrentProcessId")
 
-	// Core Kernel32 DLL handles
-	kernel32                     = windows.NewLazySystemDLL("kernel32.dll")
-	//procGetCurrentProcessId      = kernel32.NewProc("GetCurrentProcessId")
-	procGetModuleHandleW         = kernel32.NewProc("GetModuleHandleW")
+	kernel32             = windows.NewLazySystemDLL("kernel32.dll")
+	procGetCurrentProcessId = kernel32.NewProc("GetCurrentProcessId")
+	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
+
+	ole32              = windows.NewLazySystemDLL("ole32.dll")
+	procCoInitializeEx = ole32.NewProc("CoInitializeEx")
 )
 
 type rect struct {
@@ -60,21 +62,33 @@ type wndClassEx struct {
 }
 
 var (
-	contentOnce     sync.Once
+	contentOnce      sync.Once
 	contentClassAtom uintptr
 	contentMu        sync.Mutex
 	contentBrowser   *ContentBrowser
+	comOnce          sync.Once
 )
+
+// ensureCOM initializes COM on this thread (required for WebView2).
+// S_OK (0) and S_FALSE (1 = already initialized) are both success.
+func ensureCOM() {
+	comOnce.Do(func() {})
+	hr, _, _ := procCoInitializeEx.Call(0, uintptr(COINIT_APARTMENTTHREADED))
+	// RPC_E_CHANGED_MODE = 0x80010106 — already init with different model; try MTA
+	if hr == 0x80010106 {
+		procCoInitializeEx.Call(0, uintptr(COINIT_MULTITHREADED))
+	}
+}
 
 // ContentBrowser hosts a second WebView2 under the chrome strip.
 type ContentBrowser struct {
-	parent    uintptr
-	host      uintptr
-	chromium  *edge.Chromium
-	chromeH   int32
-	visible   bool
-	ready     bool
-	lastURL   string
+	parent   uintptr
+	host     uintptr
+	chromium *edge.Chromium
+	chromeH  int32
+	visible  bool
+	ready    bool
+	lastURL  string
 }
 
 func contentWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
@@ -90,15 +104,12 @@ func registerContentClass() error {
 			err = e
 			return
 		}
-
-		//Direct system call replaces windows.GetModuleHandle(nil)
 		ret, _, callErr := procGetModuleHandleW.Call(0)
 		if ret == 0 {
 			err = fmt.Errorf("GetModuleHandleW failed: %v", callErr)
 			return
 		}
 		hInst := windows.Handle(ret)
-
 		wc := wndClassEx{
 			Size:      uint32(unsafe.Sizeof(wndClassEx{})),
 			WndProc:   syscall.NewCallback(contentWndProc),
@@ -116,9 +127,8 @@ func registerContentClass() error {
 }
 
 func findAppHWND(titleSubstr string) uintptr {
-	pid := uint32(0)
 	r, _, _ := procGetCurrentProcessId.Call()
-	pid = uint32(r)
+	pid := uint32(r)
 	var found uintptr
 	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
 		var winPid uint32
@@ -147,7 +157,6 @@ func (c *ContentBrowser) createHost() error {
 	if err := registerContentClass(); err != nil {
 		return err
 	}
-
 	className, err := windows.UTF16PtrFromString(contentClassName)
 	if err != nil {
 		return err
@@ -156,17 +165,14 @@ func (c *ContentBrowser) createHost() error {
 	if err != nil {
 		return err
 	}
-
-	//Direct system call
 	ret, _, callErr := procGetModuleHandleW.Call(0)
 	if ret == 0 {
 		return fmt.Errorf("GetModuleHandleW failed: %v", callErr)
 	}
 	hInst := windows.Handle(ret)
-
 	const (
-		WS_CHILD  = 0x40000000
-		WS_VISIBLE = 0x10000000
+		WS_CHILD        = 0x40000000
+		WS_VISIBLE      = 0x10000000
 		WS_CLIPSIBLINGS = 0x04000000
 	)
 	hwnd, _, callErr := procCreateWindowExW.Call(
@@ -203,7 +209,7 @@ func (c *ContentBrowser) layout() {
 		h = 50
 	}
 	const (
-		SWP_NOZORDER = 0x0004
+		SWP_NOZORDER   = 0x0004
 		SWP_NOACTIVATE = 0x0010
 		SWP_SHOWWINDOW = 0x0040
 		SWP_HIDEWINDOW = 0x0080
@@ -221,10 +227,15 @@ func (c *ContentBrowser) layout() {
 }
 
 func (c *ContentBrowser) initChromium() error {
+	// WebView2 requires COM on the creating thread (and callbacks).
+	ensureCOM()
+
 	c.chromium = edge.NewChromium()
-	c.chromium.DataPath = "" // default under exe
+	// Separate user-data folder so we do not clash with the Wails host WebView2 profile.
+	c.chromium.DataPath = "" // library default next to exe is fine; edge uses a subfolder
+
 	if !c.chromium.Embed(c.host) {
-		return fmt.Errorf("content WebView2 Embed failed")
+		return fmt.Errorf("content WebView2 Embed failed (COM/UI thread?)")
 	}
 	c.chromium.Resize()
 	c.ready = true
@@ -275,13 +286,13 @@ func (c *ContentBrowser) LastURL() string {
 	return c.lastURL
 }
 
-// ensureContentBrowser finds the Wails HWND and creates the child content WebView2.
 func ensureContentBrowser() (*ContentBrowser, error) {
 	contentMu.Lock()
 	defer contentMu.Unlock()
 	if contentBrowser != nil && contentBrowser.ready {
 		return contentBrowser, nil
 	}
+	ensureCOM()
 	hwnd := findAppHWND("Conductino")
 	if hwnd == 0 {
 		return nil, fmt.Errorf("app window HWND not found")
@@ -302,15 +313,11 @@ func ensureContentBrowser() (*ContentBrowser, error) {
 	return cb, nil
 }
 
-// ---- App bindings ----
-
-// ContentEnsure creates the dual-webview content pane (idempotent).
 func (a *App) ContentEnsure() error {
 	_, err := ensureContentBrowser()
 	return err
 }
 
-// ContentNavigate loads a URL in the content WebView2 (chrome stays).
 func (a *App) ContentNavigate(url string) error {
 	cb, err := ensureContentBrowser()
 	if err != nil {
@@ -319,7 +326,6 @@ func (a *App) ContentNavigate(url string) error {
 	return cb.Navigate(url)
 }
 
-// ContentSetVisible shows/hides the content pane (hide when Study/Library fills the window).
 func (a *App) ContentSetVisible(show bool) error {
 	cb, err := ensureContentBrowser()
 	if err != nil {
@@ -329,7 +335,6 @@ func (a *App) ContentSetVisible(show bool) error {
 	return nil
 }
 
-// ContentResize recalculates bounds after the OS window is resized.
 func (a *App) ContentResize() error {
 	contentMu.Lock()
 	defer contentMu.Unlock()
@@ -340,7 +345,6 @@ func (a *App) ContentResize() error {
 	return nil
 }
 
-// ContentSetChromeHeight sets pixel height reserved for tabs+toolbar.
 func (a *App) ContentSetChromeHeight(px int) error {
 	contentMu.Lock()
 	defer contentMu.Unlock()
@@ -355,7 +359,6 @@ func (a *App) ContentSetChromeHeight(px int) error {
 	return nil
 }
 
-// ContentEval runs JS in the content page (e.g. read selection).
 func (a *App) ContentEval(js string) error {
 	cb, err := ensureContentBrowser()
 	if err != nil {
@@ -365,7 +368,6 @@ func (a *App) ContentEval(js string) error {
 	return nil
 }
 
-// ContentLastURL returns the last navigated URL.
 func (a *App) ContentLastURL() string {
 	contentMu.Lock()
 	defer contentMu.Unlock()
@@ -375,7 +377,6 @@ func (a *App) ContentLastURL() string {
 	return contentBrowser.LastURL()
 }
 
-// ContentGetSelection asks the content page for the current selection via script + clipboard fallback on JS side.
 func (a *App) ContentCopySelection() error {
 	js := `(function(){
   try {
