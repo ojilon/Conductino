@@ -17,26 +17,34 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// Custom messages handled on the parent (Wails) UI thread.
 const (
-	defaultChromeHeight       = 82
-	contentClassName          = "ConductinoContentHost"
-	COINIT_APARTMENTTHREADED  = 0x2
-	COINIT_MULTITHREADED      = 0x0
-	WS_CHILD                  = 0x40000000
-	WS_VISIBLE                = 0x10000000
-	WS_CLIPSIBLINGS           = 0x04000000
-	WS_CLIPCHILDREN           = 0x02000000
-	WS_POPUP                  = 0x80000000
-	WS_BORDER                 = 0x00800000
-	WS_EX_TOOLWINDOW          = 0x00000080
-	WS_EX_NOACTIVATE          = 0x08000000
-	SWP_NOZORDER              = 0x0004
-	SWP_NOACTIVATE            = 0x0010
-	SWP_SHOWWINDOW            = 0x0040
-	SWP_HIDEWINDOW            = 0x0080
-	SW_SHOW                   = 5
-	SW_HIDE                   = 0
-	GWLP_HWNDPARENT           = -8
+	wmAppBase           = 0x8000 // WM_APP
+	wmCreateContent     = wmAppBase + 0x51
+	wmNavigateContent   = wmAppBase + 0x52
+	wmResizeContent     = wmAppBase + 0x53
+	wmSetVisibleContent = wmAppBase + 0x54
+	wmEvalContent       = wmAppBase + 0x55
+
+	defaultChromeHeight = 82
+	contentClassName    = "ConductinoContentHost"
+
+	COINIT_APARTMENTTHREADED = 0x2
+	COINIT_MULTITHREADED     = 0x0
+
+	WS_CHILD        = 0x40000000
+	WS_VISIBLE      = 0x10000000
+	WS_CLIPSIBLINGS = 0x04000000
+	WS_CLIPCHILDREN = 0x02000000
+
+	SWP_NOZORDER   = 0x0004
+	SWP_NOACTIVATE = 0x0010
+	SWP_SHOWWINDOW = 0x0040
+	SWP_HIDEWINDOW = 0x0080
+	SW_SHOW        = 5
+	SW_HIDE        = 0
+
+	GWL_WNDPROC = -4 // GWLP_WNDPROC on 64-bit uses SetWindowLongPtr
 )
 
 var (
@@ -45,14 +53,17 @@ var (
 	procShowWindow               = user32.NewProc("ShowWindow")
 	procSetWindowPos             = user32.NewProc("SetWindowPos")
 	procGetClientRect            = user32.NewProc("GetClientRect")
-	procClientToScreen           = user32.NewProc("ClientToScreen")
 	procRegisterClassExW         = user32.NewProc("RegisterClassExW")
 	procDefWindowProcW           = user32.NewProc("DefWindowProcW")
+	procCallWindowProcW          = user32.NewProc("CallWindowProcW")
 	procGetWindowTextW           = user32.NewProc("GetWindowTextW")
 	procIsWindowVisible          = user32.NewProc("IsWindowVisible")
 	procEnumWindows              = user32.NewProc("EnumWindows")
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
-	procSetWindowLongPtrW       = user32.NewProc("SetWindowLongPtrW")
+	procSetWindowLongPtrW        = user32.NewProc("SetWindowLongPtrW")
+	procGetWindowLongPtrW        = user32.NewProc("GetWindowLongPtrW")
+	procPostMessageW             = user32.NewProc("PostMessageW")
+	procSendMessageW             = user32.NewProc("SendMessageW")
 
 	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGetCurrentProcessId = kernel32.NewProc("GetCurrentProcessId")
@@ -64,10 +75,6 @@ var (
 
 type rect struct {
 	Left, Top, Right, Bottom int32
-}
-
-type point struct {
-	X, Y int32
 }
 
 type wndClassEx struct {
@@ -90,6 +97,20 @@ var (
 	contentClassAtom uintptr
 	contentMu        sync.Mutex
 	contentBrowser   *ContentBrowser
+
+	subclassMu   sync.Mutex
+	origWndProc  uintptr
+	subclassed   bool
+	parentHWND   uintptr
+
+	// Pending ops for UI thread (set before Post/SendMessage).
+	pendingURL    string
+	pendingShow   bool
+	pendingEval   string
+	pendingChrome int32
+
+	createDone chan error
+	navDone    chan error
 )
 
 func ensureCOM() {
@@ -107,12 +128,72 @@ type ContentBrowser struct {
 	visible  bool
 	ready    bool
 	lastURL  string
-	usePopup bool // owned popup instead of pure WS_CHILD
 }
 
 func contentWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
 	return r
+}
+
+// parentSubclassProc runs on the Wails UI thread.
+func parentSubclassProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
+	switch msg {
+	case wmCreateContent:
+		err := uiCreateContent(hwnd)
+		if createDone != nil {
+			select {
+			case createDone <- err:
+			default:
+			}
+		}
+		return 0
+	case wmNavigateContent:
+		err := uiNavigate()
+		if navDone != nil {
+			select {
+			case navDone <- err:
+			default:
+			}
+		}
+		return 0
+	case wmResizeContent:
+		uiResize()
+		return 0
+	case wmSetVisibleContent:
+		uiSetVisible(pendingShow)
+		return 0
+	case wmEvalContent:
+		uiEval(pendingEval)
+		return 0
+	case 0x0005: // WM_SIZE
+		uiResize()
+	}
+	if origWndProc != 0 {
+		r, _, _ := procCallWindowProcW.Call(origWndProc, hwnd, uintptr(msg), wParam, lParam)
+		return r
+	}
+	r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
+	return r
+}
+
+var parentSubclassCallback = syscall.NewCallback(parentSubclassProc)
+
+func subclassParent(hwnd uintptr) error {
+	subclassMu.Lock()
+	defer subclassMu.Unlock()
+	if subclassed && parentHWND == hwnd {
+		return nil
+	}
+	prev, _, err := procSetWindowLongPtrW.Call(hwnd, uintptr(GWL_WNDPROC), parentSubclassCallback)
+	if prev == 0 && err != windows.ERROR_SUCCESS && err != syscall.Errno(0) {
+		// On success prev is the old proc (non-zero usually). Zero can be valid in edge cases.
+		log.Printf("[content] SetWindowLongPtr prev=%v err=%v", prev, err)
+	}
+	origWndProc = prev
+	parentHWND = hwnd
+	subclassed = true
+	log.Printf("[content] subclassed parent HWND=%v origProc=%v", hwnd, prev)
+	return nil
 }
 
 func registerContentClass() error {
@@ -181,11 +262,20 @@ func contentDataPath() string {
 	return dir
 }
 
-// createHost builds a child HWND first; if WebView2 rejects it we recreate as owned popup.
-func (c *ContentBrowser) createHost(asPopup bool) error {
+// uiCreateContent MUST run on the UI thread (via subclass message).
+func uiCreateContent(parent uintptr) error {
+	ensureCOM()
 	if err := registerContentClass(); err != nil {
 		return err
 	}
+
+	contentMu.Lock()
+	if contentBrowser != nil && contentBrowser.ready {
+		contentMu.Unlock()
+		return nil
+	}
+	contentMu.Unlock()
+
 	className, err := windows.UTF16PtrFromString(contentClassName)
 	if err != nil {
 		return err
@@ -200,53 +290,95 @@ func (c *ContentBrowser) createHost(asPopup bool) error {
 	}
 	hInst := windows.Handle(ret)
 
-	var style, exStyle uintptr
-	var parent uintptr
-	if asPopup {
-		// Owned popup sits above the main window content area (more reliable for 2nd WebView2).
-		style = uintptr(WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN)
-		exStyle = uintptr(WS_EX_TOOLWINDOW)
-		parent = c.parent // owner
-		c.usePopup = true
-	} else {
-		style = uintptr(WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN)
-		exStyle = 0
-		parent = c.parent
-		c.usePopup = false
+	chromeH := int32(defaultChromeHeight)
+	if pendingChrome >= 40 {
+		chromeH = pendingChrome
+	}
+
+	var rc rect
+	procGetClientRect.Call(parent, uintptr(unsafe.Pointer(&rc)))
+	w := rc.Right - rc.Left
+	h := rc.Bottom - rc.Top - chromeH
+	if w < 200 {
+		w = 200
+	}
+	if h < 200 {
+		h = 200
 	}
 
 	hwnd, _, callErr := procCreateWindowExW.Call(
-		exStyle,
+		0,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(windowName)),
-		style,
-		0, 0, 800, 600, // non-zero initial size (required before Embed)
+		uintptr(WS_CHILD|WS_CLIPSIBLINGS|WS_CLIPCHILDREN),
+		0, uintptr(chromeH), uintptr(w), uintptr(h),
 		parent,
 		0,
 		uintptr(hInst),
 		0,
 	)
 	if hwnd == 0 {
-		return fmt.Errorf("CreateWindowEx: %v", callErr)
+		return fmt.Errorf("CreateWindowEx content host: %v", callErr)
 	}
-	c.host = hwnd
+	procShowWindow.Call(hwnd, uintptr(SW_SHOW))
 
-	// Size + show before WebView2 controller creation.
-	c.visible = true
-	c.layout()
-	procShowWindow.Call(c.host, uintptr(SW_SHOW))
-	// Let the window manager settle.
-	time.Sleep(50 * time.Millisecond)
+	chromium := edge.NewChromium()
+	chromium.DataPath = contentDataPath()
+	log.Printf("[content] UI-thread Embed host=%v DataPath=%s", hwnd, chromium.DataPath)
+
+	if !chromium.Embed(hwnd) {
+		return fmt.Errorf("Embed returned false on UI thread")
+	}
+
+	// Allow async controller setup.
+	time.Sleep(500 * time.Millisecond)
+	chromium.Resize()
+
+	cb := &ContentBrowser{
+		parent:   parent,
+		host:     hwnd,
+		chromium: chromium,
+		chromeH:  chromeH,
+		visible:  false,
+		ready:    true,
+	}
+	contentMu.Lock()
+	contentBrowser = cb
+	contentMu.Unlock()
+
+	// Start hidden until first navigate.
+	procShowWindow.Call(hwnd, uintptr(SW_HIDE))
+	log.Printf("[content] WebView2 ready on UI thread")
 	return nil
 }
 
-func (c *ContentBrowser) layout() {
-	if c.parent == 0 || c.host == 0 {
+func uiNavigate() error {
+	contentMu.Lock()
+	cb := contentBrowser
+	url := pendingURL
+	contentMu.Unlock()
+	if cb == nil || !cb.ready || cb.chromium == nil {
+		return fmt.Errorf("content browser not ready")
+	}
+	if url == "" {
+		return fmt.Errorf("empty url")
+	}
+	cb.lastURL = url
+	cb.visible = true
+	uiLayout(cb)
+	procShowWindow.Call(cb.host, uintptr(SW_SHOW))
+	cb.chromium.Navigate(url)
+	log.Printf("[content] Navigate %s", url)
+	return nil
+}
+
+func uiLayout(cb *ContentBrowser) {
+	if cb == nil || cb.parent == 0 || cb.host == 0 {
 		return
 	}
 	var rc rect
-	procGetClientRect.Call(c.parent, uintptr(unsafe.Pointer(&rc)))
-	top := c.chromeH
+	procGetClientRect.Call(cb.parent, uintptr(unsafe.Pointer(&rc)))
+	top := cb.chromeH
 	if top < 40 {
 		top = defaultChromeHeight
 	}
@@ -258,161 +390,110 @@ func (c *ContentBrowser) layout() {
 	if h < 100 {
 		h = 100
 	}
-
-	flags := uintptr(SWP_NOACTIVATE)
-	if c.visible {
+	flags := uintptr(SWP_NOZORDER | SWP_NOACTIVATE)
+	if cb.visible {
 		flags |= SWP_SHOWWINDOW
 	} else {
 		flags |= SWP_HIDEWINDOW
 	}
+	procSetWindowPos.Call(cb.host, 0, 0, uintptr(top), uintptr(w), uintptr(h), flags)
+	if cb.chromium != nil && cb.ready {
+		cb.chromium.Resize()
+	}
+}
 
-	if c.usePopup {
-		// Client (0, top) → screen coords for popup placement.
-		pt := point{X: 0, Y: top}
-		procClientToScreen.Call(c.parent, uintptr(unsafe.Pointer(&pt)))
-		procSetWindowPos.Call(c.host, 0, uintptr(pt.X), uintptr(pt.Y), uintptr(w), uintptr(h), flags)
+func uiResize() {
+	contentMu.Lock()
+	cb := contentBrowser
+	contentMu.Unlock()
+	if cb != nil {
+		uiLayout(cb)
+	}
+}
+
+func uiSetVisible(show bool) {
+	contentMu.Lock()
+	cb := contentBrowser
+	contentMu.Unlock()
+	if cb == nil {
+		return
+	}
+	cb.visible = show
+	uiLayout(cb)
+	if show {
+		procShowWindow.Call(cb.host, uintptr(SW_SHOW))
 	} else {
-		flags |= SWP_NOZORDER
-		procSetWindowPos.Call(c.host, 0, 0, uintptr(top), uintptr(w), uintptr(h), flags)
-	}
-	if c.chromium != nil && c.ready {
-		c.chromium.Resize()
+		procShowWindow.Call(cb.host, uintptr(SW_HIDE))
 	}
 }
 
-func (c *ContentBrowser) initChromium() error {
-	ensureCOM()
-
-	c.chromium = edge.NewChromium()
-	c.chromium.DataPath = contentDataPath()
-	log.Printf("[content] DataPath=%s host=%v popup=%v", c.chromium.DataPath, c.host, c.usePopup)
-
-	if !c.chromium.Embed(c.host) {
-		return fmt.Errorf("content WebView2 Embed returned false")
-	}
-
-	// Embed starts async environment+controller creation. Wait briefly for controller.
-	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) {
-		time.Sleep(100 * time.Millisecond)
-		// Resize is a no-op until controller exists; try Navigate to about:blank as readiness probe.
-		c.chromium.Resize()
-		// Heuristic: if Eval does not panic and Resize ran, mark ready after 400ms min
-		if time.Since(deadline.Add(-8*time.Second)) > 400*time.Millisecond {
-			break
-		}
-	}
-	// Give controller creation callbacks time (error is logged by go-webview2 if it fails).
-	time.Sleep(400 * time.Millisecond)
-	c.chromium.Resize()
-	c.ready = true
-	log.Printf("[content] WebView2 Embed finished (check logs for controller errors)")
-	return nil
-}
-
-func (c *ContentBrowser) Navigate(url string) error {
-	url = strings.TrimSpace(url)
-	if url == "" {
-		return fmt.Errorf("empty url")
-	}
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") &&
-		!strings.HasPrefix(url, "about:") {
-		url = "https://" + url
-	}
-	if !c.ready || c.chromium == nil {
-		return fmt.Errorf("content browser not ready")
-	}
-	c.lastURL = url
-	c.visible = true
-	c.layout()
-	c.chromium.Navigate(url)
-	return nil
-}
-
-func (c *ContentBrowser) SetVisible(v bool) {
-	c.visible = v
-	c.layout()
-	if c.host != 0 {
-		if v {
-			procShowWindow.Call(c.host, uintptr(SW_SHOW))
-		} else {
-			procShowWindow.Call(c.host, uintptr(SW_HIDE))
-		}
+func uiEval(js string) {
+	contentMu.Lock()
+	cb := contentBrowser
+	contentMu.Unlock()
+	if cb != nil && cb.chromium != nil && cb.ready {
+		cb.chromium.Eval(js)
 	}
 }
 
-func (c *ContentBrowser) Eval(js string) {
-	if c.chromium != nil && c.ready {
-		c.chromium.Eval(js)
+func postToUI(msg uint32) {
+	if parentHWND == 0 {
+		return
 	}
+	procPostMessageW.Call(parentHWND, uintptr(msg), 0, 0)
 }
 
-func (c *ContentBrowser) LastURL() string { return c.lastURL }
+func sendToUI(msg uint32, timeoutMs uintptr) {
+	if parentHWND == 0 {
+		return
+	}
+	// Synchronous so caller can wait for result via channel filled in handler.
+	procSendMessageW.Call(parentHWND, uintptr(msg), 0, 0)
+}
 
 func ensureContentBrowser() (*ContentBrowser, error) {
 	contentMu.Lock()
-	defer contentMu.Unlock()
 	if contentBrowser != nil && contentBrowser.ready {
-		return contentBrowser, nil
+		cb := contentBrowser
+		contentMu.Unlock()
+		return cb, nil
 	}
-	ensureCOM()
+	contentMu.Unlock()
+
 	hwnd := findAppHWND("Conductino")
 	if hwnd == 0 {
 		return nil, fmt.Errorf("app window HWND not found")
 	}
-
-	try := func(asPopup bool) (*ContentBrowser, error) {
-		cb := &ContentBrowser{
-			parent:  hwnd,
-			chromeH: defaultChromeHeight,
-			visible: false,
-		}
-		if err := cb.createHost(asPopup); err != nil {
-			return nil, err
-		}
-		if err := cb.initChromium(); err != nil {
-			return nil, err
-		}
-		cb.SetVisible(false)
-		return cb, nil
+	if err := subclassParent(hwnd); err != nil {
+		return nil, err
 	}
 
-	// Prefer true child first (integrated layout).
-	cb, err := try(false)
-	if err != nil {
-		log.Printf("[content] child host failed: %v — trying owned popup", err)
-		cb, err = try(true)
+	createDone = make(chan error, 1)
+	// SendMessage runs handler on UI thread before returning.
+	sendToUI(wmCreateContent, 10000)
+
+	select {
+	case err := <-createDone:
 		if err != nil {
 			return nil, err
 		}
+	case <-time.After(12 * time.Second):
+		// Handler may have completed without signaling if channel raced.
+		contentMu.Lock()
+		cb := contentBrowser
+		contentMu.Unlock()
+		if cb != nil && cb.ready {
+			return cb, nil
+		}
+		return nil, fmt.Errorf("timeout waiting for UI-thread WebView2 create")
 	}
-	// If child path "succeeded" Embed but controller error was only logged, user may still see blank.
-	// Second attempt with popup is available via ContentRecreateAsPopup if needed.
-	contentBrowser = cb
-	return cb, nil
-}
 
-// ContentRecreateAsPopup forces owned-popup content surface (call if child path is blank).
-func (a *App) ContentRecreateAsPopup() error {
 	contentMu.Lock()
-	contentBrowser = nil
-	contentMu.Unlock()
-	ensureCOM()
-	hwnd := findAppHWND("Conductino")
-	if hwnd == 0 {
-		return fmt.Errorf("app window HWND not found")
+	defer contentMu.Unlock()
+	if contentBrowser == nil || !contentBrowser.ready {
+		return nil, fmt.Errorf("content browser still not ready")
 	}
-	cb := &ContentBrowser{parent: hwnd, chromeH: defaultChromeHeight}
-	if err := cb.createHost(true); err != nil {
-		return err
-	}
-	if err := cb.initChromium(); err != nil {
-		return err
-	}
-	contentMu.Lock()
-	contentBrowser = cb
-	contentMu.Unlock()
-	return nil
+	return contentBrowser, nil
 }
 
 func (a *App) ContentEnsure() error {
@@ -421,52 +502,67 @@ func (a *App) ContentEnsure() error {
 }
 
 func (a *App) ContentNavigate(url string) error {
-	cb, err := ensureContentBrowser()
-	if err != nil {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return fmt.Errorf("empty url")
+	}
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") &&
+		!strings.HasPrefix(url, "about:") {
+		url = "https://" + url
+	}
+	if _, err := ensureContentBrowser(); err != nil {
 		return err
 	}
-	return cb.Navigate(url)
+	contentMu.Lock()
+	pendingURL = url
+	contentMu.Unlock()
+	navDone = make(chan error, 1)
+	sendToUI(wmNavigateContent, 5000)
+	select {
+	case err := <-navDone:
+		return err
+	case <-time.After(5 * time.Second):
+		return nil // navigate may still have run
+	}
 }
 
 func (a *App) ContentSetVisible(show bool) error {
-	cb, err := ensureContentBrowser()
-	if err != nil {
+	if _, err := ensureContentBrowser(); err != nil {
 		return err
 	}
-	cb.SetVisible(show)
+	pendingShow = show
+	sendToUI(wmSetVisibleContent, 2000)
 	return nil
 }
 
 func (a *App) ContentResize() error {
-	contentMu.Lock()
-	defer contentMu.Unlock()
-	if contentBrowser == nil {
+	if parentHWND == 0 {
 		return nil
 	}
-	contentBrowser.layout()
+	postToUI(wmResizeContent)
 	return nil
 }
 
 func (a *App) ContentSetChromeHeight(px int) error {
-	contentMu.Lock()
-	defer contentMu.Unlock()
-	if contentBrowser == nil {
-		return nil
-	}
 	if px < 40 {
 		px = defaultChromeHeight
 	}
-	contentBrowser.chromeH = int32(px)
-	contentBrowser.layout()
+	pendingChrome = int32(px)
+	contentMu.Lock()
+	if contentBrowser != nil {
+		contentBrowser.chromeH = int32(px)
+	}
+	contentMu.Unlock()
+	postToUI(wmResizeContent)
 	return nil
 }
 
 func (a *App) ContentEval(js string) error {
-	cb, err := ensureContentBrowser()
-	if err != nil {
+	if _, err := ensureContentBrowser(); err != nil {
 		return err
 	}
-	cb.Eval(js)
+	pendingEval = js
+	sendToUI(wmEvalContent, 2000)
 	return nil
 }
 
@@ -476,7 +572,7 @@ func (a *App) ContentLastURL() string {
 	if contentBrowser == nil {
 		return ""
 	}
-	return contentBrowser.LastURL()
+	return contentBrowser.lastURL
 }
 
 func (a *App) ContentCopySelection() error {
@@ -490,4 +586,8 @@ func (a *App) ContentCopySelection() error {
   } catch (e) {}
 })();`
 	return a.ContentEval(js)
+}
+
+func (a *App) ContentRecreateAsPopup() error {
+	return a.ContentEnsure()
 }

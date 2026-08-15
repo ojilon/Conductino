@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -13,11 +14,10 @@ import (
 var (
 	homeMu  sync.RWMutex
 	homeURL = "http://wails.localhost"
-	// useDualContent is false until child WebView2 controller creation is reliable on the UI thread.
-	useDualContent = false
+	// Dual content pane via UI-thread PostMessage (content_webview_windows.go).
+	useDualContent = true
 )
 
-// SetHomeURL is called once from the asset UI so we can return after browsing.
 func (a *App) SetHomeURL(url string) {
 	url = strings.TrimSpace(url)
 	if url == "" {
@@ -41,8 +41,7 @@ func (a *App) getHomeURL() string {
 	return homeURL
 }
 
-// Navigate loads a URL in the main WebView2 (real browser — Cloudflare/ResearchGate work).
-// Dual content-pane is opt-in later; default is full-window + floating tool bar.
+// Navigate prefers dual content WebView2 (chrome stays). Falls back to full-window.
 func (a *App) Navigate(url string) error {
 	url = strings.TrimSpace(url)
 	if url == "" {
@@ -54,9 +53,11 @@ func (a *App) Navigate(url string) error {
 	}
 
 	if useDualContent {
-		if err := a.ContentNavigate(url); err == nil {
+		err := a.ContentNavigate(url)
+		if err == nil {
 			return nil
 		}
+		log.Printf("[navigate] dual content failed: %v — full-window fallback", err)
 	}
 
 	if a.ctx == nil {
@@ -64,7 +65,6 @@ func (a *App) Navigate(url string) error {
 	}
 	b, _ := json.Marshal(url)
 	runtime.WindowExecJS(a.ctx, fmt.Sprintf("window.location.href = %s;", string(b)))
-
 	home := a.getHomeURL()
 	go a.injectToolBarLater(home, 1200)
 	go a.injectToolBarLater(home, 3000)
@@ -72,10 +72,10 @@ func (a *App) Navigate(url string) error {
 	return nil
 }
 
-// GoHome returns to the Conductino asset UI.
 func (a *App) GoHome() error {
+	_ = a.ContentSetVisible(false)
 	if a.ctx == nil {
-		return fmt.Errorf("app not started")
+		return nil
 	}
 	home := a.getHomeURL()
 	b, _ := json.Marshal(home + "/")
@@ -106,7 +106,7 @@ func buildInjectToolbarJS(home string) string {
     bar.style.cssText = "all:initial;position:fixed;top:0;left:0;right:0;z-index:2147483647;"+
       "display:flex;align-items:center;gap:8px;padding:6px 10px;"+
       "background:#141a30;color:#e8ecfb;font:13px system-ui,Segoe UI,sans-serif;"+
-      "box-shadow:0 2px 12px rgba(0,0,0,.35);border-bottom:1px solid #26305a;";
+      "box-shadow:0 2px 12px rgba(0,0,0,.35);";
     function btn(label, primary){
       var b=document.createElement("button");
       b.textContent=label;
@@ -119,17 +119,15 @@ func buildInjectToolbarJS(home string) string {
     homeBtn.onclick = function(){ location.href = home; };
     var copyBtn = btn("Copy selection", false);
     copyBtn.onclick = function(){
-      var t = "";
-      try { t = String(window.getSelection() || ""); } catch(e) {}
-      if(!t){ alert("Select text on the page first"); return; }
+      var t = ""; try { t = String(window.getSelection() || ""); } catch(e) {}
+      if(!t){ alert("Select text first"); return; }
       if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(t).then(function(){ copyBtn.textContent="Copied"; setTimeout(function(){copyBtn.textContent="Copy selection";},1200); });
-      } else { prompt("Copy:", t); }
+        navigator.clipboard.writeText(t);
+      }
     };
     var studyBtn = btn("Selection → Study", true);
     studyBtn.onclick = function(){
-      var t = "";
-      try { t = String(window.getSelection() || ""); } catch(e) {}
+      var t = ""; try { t = String(window.getSelection() || ""); } catch(e) {}
       if(!t){ alert("Select text first"); return; }
       if(navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(t).then(function(){ location.href = home + "#conductino-study-clipboard"; });
@@ -137,8 +135,7 @@ func buildInjectToolbarJS(home string) string {
     };
     var sumBtn = btn("Summarize selection", true);
     sumBtn.onclick = function(){
-      var t = "";
-      try { t = String(window.getSelection() || ""); } catch(e) {}
+      var t = ""; try { t = String(window.getSelection() || ""); } catch(e) {}
       if(!t){ alert("Select text first"); return; }
       if(navigator.clipboard && navigator.clipboard.writeText){
         navigator.clipboard.writeText(t).then(function(){ location.href = home + "#conductino-summarize-clipboard"; });
@@ -146,11 +143,7 @@ func buildInjectToolbarJS(home string) string {
     };
     var hideBtn = btn("Hide", false);
     hideBtn.onclick = function(){ bar.remove(); window.__conductinoBarInstalled=false; };
-    bar.appendChild(homeBtn);
-    bar.appendChild(copyBtn);
-    bar.appendChild(studyBtn);
-    bar.appendChild(sumBtn);
-    bar.appendChild(hideBtn);
+    bar.appendChild(homeBtn); bar.appendChild(copyBtn); bar.appendChild(studyBtn); bar.appendChild(sumBtn); bar.appendChild(hideBtn);
     (document.documentElement || document.body).appendChild(bar);
   } catch (e) {}
 })();`, string(homeJSON))

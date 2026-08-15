@@ -1,30 +1,31 @@
-# Browser model (current)
+# Dual WebView2 (Windows)
 
-## Working path (default)
+## Architecture
 
-- Omnibox navigates the **main WebView2** (same engine as Edge).
-- Real sites work: DuckDuckGo, ResearchGate, Cloudflare, etc.
-- A **floating tool bar** is injected on web pages:
-  - Conductino Home
-  - Copy selection
-  - Selection → Study
-  - Summarize selection
-  - Hide
-- Tools run **only when you click them**.
+```
+┌─────────────────────────────────────┐
+│ Tabs + omnibox + tools (Wails WV2)  │  chrome — never navigates away
+├─────────────────────────────────────┤
+│ Content WebView2 (child HWND)       │  real sites
+└─────────────────────────────────────┘
+```
 
-## Dual chrome + content WebView2 (deferred)
+Content WebView2 is created on the **parent window UI thread**:
 
-Code lives in `content_webview_windows.go` but is **disabled** (`useDualContent = false` in `navigate.go`).
+1. Subclass Wails HWND (`SetWindowLongPtr` → custom `WndProc`)
+2. `SendMessage(WM_APP+CREATE)` → handler runs on UI thread
+3. `CreateWindowEx(WS_CHILD)` + `Chromium.Embed(host)` on that thread
+4. Navigate / resize / visibility via further UI-thread messages
 
-Why deferred:
-- Second WebView2 controller often fails or shows a blank pane when created from Wails binding threads (`0x8007139F` / empty surface).
-- Needs create-on-UI-thread via `PostMessage` subclassing of the parent HWND — non-trivial native work.
+Fallback: if dual create fails, `Navigate` uses full-window load + floating bar.
 
-### Future enable steps (for you or a later session)
+## Logs to expect
 
-1. Subclass parent HWND; handle `WM_APP+N` to create child host + `Embed` on the UI thread.
-2. Unique DataPath (already set under `%LocalAppData%\Conductino\content-webview2`).
-3. Set `useDualContent = true` in `navigate.go` when controller creation is reliable.
-4. Keep chrome height sync via `ContentSetChromeHeight`.
+```
+[content] subclassed parent HWND=...
+[content] UI-thread Embed host=...
+[content] WebView2 ready on UI thread
+[content] Navigate https://...
+```
 
-Until then, full-window navigate + floating bar is the production path for study use.
+No `8007139f` / `CoInitialize has not been called`.
