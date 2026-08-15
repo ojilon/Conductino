@@ -17,9 +17,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Custom messages handled on the parent (Wails) UI thread.
 const (
-	wmAppBase           = 0x8000 // WM_APP
+	wmAppBase           = 0x8000
 	wmCreateContent     = wmAppBase + 0x51
 	wmNavigateContent   = wmAppBase + 0x52
 	wmResizeContent     = wmAppBase + 0x53
@@ -33,7 +32,6 @@ const (
 	COINIT_MULTITHREADED     = 0x0
 
 	WS_CHILD        = 0x40000000
-	WS_VISIBLE      = 0x10000000
 	WS_CLIPSIBLINGS = 0x04000000
 	WS_CLIPCHILDREN = 0x02000000
 
@@ -44,7 +42,7 @@ const (
 	SW_SHOW        = 5
 	SW_HIDE        = 0
 
-	GWL_WNDPROC = -4 // GWLP_WNDPROC on 64-bit uses SetWindowLongPtr
+	GWL_WNDPROC = -4
 )
 
 var (
@@ -61,13 +59,13 @@ var (
 	procEnumWindows              = user32.NewProc("EnumWindows")
 	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
 	procSetWindowLongPtrW        = user32.NewProc("SetWindowLongPtrW")
-	procGetWindowLongPtrW        = user32.NewProc("GetWindowLongPtrW")
 	procPostMessageW             = user32.NewProc("PostMessageW")
 	procSendMessageW             = user32.NewProc("SendMessageW")
 
 	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGetCurrentProcessId = kernel32.NewProc("GetCurrentProcessId")
 	procGetModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
+	procGetCurrentThreadId  = kernel32.NewProc("GetCurrentThreadId")
 
 	ole32              = windows.NewLazySystemDLL("ole32.dll")
 	procCoInitializeEx = ole32.NewProc("CoInitializeEx")
@@ -98,16 +96,15 @@ var (
 	contentMu        sync.Mutex
 	contentBrowser   *ContentBrowser
 
-	subclassMu   sync.Mutex
-	origWndProc  uintptr
-	subclassed   bool
-	parentHWND   uintptr
+	subclassMu  sync.Mutex
+	origWndProc uintptr
+	subclassed  bool
+	parentHWND  uintptr
 
-	// Pending ops for UI thread (set before Post/SendMessage).
 	pendingURL    string
 	pendingShow   bool
 	pendingEval   string
-	pendingChrome int32
+	pendingChrome int32 = defaultChromeHeight
 
 	createDone chan error
 	navDone    chan error
@@ -135,7 +132,6 @@ func contentWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	return r
 }
 
-// parentSubclassProc runs on the Wails UI thread.
 func parentSubclassProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case wmCreateContent:
@@ -184,15 +180,11 @@ func subclassParent(hwnd uintptr) error {
 	if subclassed && parentHWND == hwnd {
 		return nil
 	}
-	prev, _, err := procSetWindowLongPtrW.Call(hwnd, uintptr(GWL_WNDPROC), parentSubclassCallback)
-	if prev == 0 && err != windows.ERROR_SUCCESS && err != syscall.Errno(0) {
-		// On success prev is the old proc (non-zero usually). Zero can be valid in edge cases.
-		log.Printf("[content] SetWindowLongPtr prev=%v err=%v", prev, err)
-	}
+	prev, _, _ := procSetWindowLongPtrW.Call(hwnd, uintptr(uint32(GWL_WNDPROC)), parentSubclassCallback)
 	origWndProc = prev
 	parentHWND = hwnd
 	subclassed = true
-	log.Printf("[content] subclassed parent HWND=%v origProc=%v", hwnd, prev)
+	log.Printf("[content] subclassed parent HWND=%v", hwnd)
 	return nil
 }
 
@@ -262,7 +254,6 @@ func contentDataPath() string {
 	return dir
 }
 
-// uiCreateContent MUST run on the UI thread (via subclass message).
 func uiCreateContent(parent uintptr) error {
 	ensureCOM()
 	if err := registerContentClass(); err != nil {
@@ -276,14 +267,8 @@ func uiCreateContent(parent uintptr) error {
 	}
 	contentMu.Unlock()
 
-	className, err := windows.UTF16PtrFromString(contentClassName)
-	if err != nil {
-		return err
-	}
-	windowName, err := windows.UTF16PtrFromString("ConductinoContent")
-	if err != nil {
-		return err
-	}
+	className, _ := windows.UTF16PtrFromString(contentClassName)
+	windowName, _ := windows.UTF16PtrFromString("ConductinoContent")
 	ret, _, callErr := procGetModuleHandleW.Call(0)
 	if ret == 0 {
 		return fmt.Errorf("GetModuleHandleW: %v", callErr)
@@ -306,7 +291,7 @@ func uiCreateContent(parent uintptr) error {
 		h = 200
 	}
 
-	hwnd, _, callErr := procCreateWindowExW.Call(
+	host, _, callErr := procCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(windowName)),
@@ -317,26 +302,24 @@ func uiCreateContent(parent uintptr) error {
 		uintptr(hInst),
 		0,
 	)
-	if hwnd == 0 {
+	if host == 0 {
 		return fmt.Errorf("CreateWindowEx content host: %v", callErr)
 	}
-	procShowWindow.Call(hwnd, uintptr(SW_SHOW))
+	procShowWindow.Call(host, uintptr(SW_SHOW))
 
 	chromium := edge.NewChromium()
 	chromium.DataPath = contentDataPath()
-	log.Printf("[content] UI-thread Embed host=%v DataPath=%s", hwnd, chromium.DataPath)
+	log.Printf("[content] UI-thread Embed host=%v", host)
 
-	if !chromium.Embed(hwnd) {
+	if !chromium.Embed(host) {
 		return fmt.Errorf("Embed returned false on UI thread")
 	}
-
-	// Allow async controller setup.
 	time.Sleep(500 * time.Millisecond)
 	chromium.Resize()
 
 	cb := &ContentBrowser{
 		parent:   parent,
-		host:     hwnd,
+		host:     host,
 		chromium: chromium,
 		chromeH:  chromeH,
 		visible:  false,
@@ -346,8 +329,7 @@ func uiCreateContent(parent uintptr) error {
 	contentBrowser = cb
 	contentMu.Unlock()
 
-	// Start hidden until first navigate.
-	procShowWindow.Call(hwnd, uintptr(SW_HIDE))
+	procShowWindow.Call(host, uintptr(SW_HIDE))
 	log.Printf("[content] WebView2 ready on UI thread")
 	return nil
 }
@@ -359,9 +341,6 @@ func uiNavigate() error {
 	contentMu.Unlock()
 	if cb == nil || !cb.ready || cb.chromium == nil {
 		return fmt.Errorf("content browser not ready")
-	}
-	if url == "" {
-		return fmt.Errorf("empty url")
 	}
 	cb.lastURL = url
 	cb.visible = true
@@ -436,21 +415,6 @@ func uiEval(js string) {
 	}
 }
 
-func postToUI(msg uint32) {
-	if parentHWND == 0 {
-		return
-	}
-	procPostMessageW.Call(parentHWND, uintptr(msg), 0, 0)
-}
-
-func sendToUI(msg uint32, timeoutMs uintptr) {
-	if parentHWND == 0 {
-		return
-	}
-	// Synchronous so caller can wait for result via channel filled in handler.
-	procSendMessageW.Call(parentHWND, uintptr(msg), 0, 0)
-}
-
 func ensureContentBrowser() (*ContentBrowser, error) {
 	contentMu.Lock()
 	if contentBrowser != nil && contentBrowser.ready {
@@ -469,8 +433,8 @@ func ensureContentBrowser() (*ContentBrowser, error) {
 	}
 
 	createDone = make(chan error, 1)
-	// SendMessage runs handler on UI thread before returning.
-	sendToUI(wmCreateContent, 10000)
+	// SendMessage invokes WndProc on the UI thread (nested if already on UI thread).
+	procSendMessageW.Call(parentHWND, uintptr(wmCreateContent), 0, 0)
 
 	select {
 	case err := <-createDone:
@@ -478,7 +442,6 @@ func ensureContentBrowser() (*ContentBrowser, error) {
 			return nil, err
 		}
 	case <-time.After(12 * time.Second):
-		// Handler may have completed without signaling if channel raced.
 		contentMu.Lock()
 		cb := contentBrowser
 		contentMu.Unlock()
@@ -513,16 +476,14 @@ func (a *App) ContentNavigate(url string) error {
 	if _, err := ensureContentBrowser(); err != nil {
 		return err
 	}
-	contentMu.Lock()
 	pendingURL = url
-	contentMu.Unlock()
 	navDone = make(chan error, 1)
 	sendToUI(wmNavigateContent, 5000)
 	select {
 	case err := <-navDone:
 		return err
 	case <-time.After(5 * time.Second):
-		return nil // navigate may still have run
+		return nil
 	}
 }
 
