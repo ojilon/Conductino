@@ -34,14 +34,29 @@
     goHome: function () {
       return call("GoHome");
     },
+    contentEnsure: function () {
+      return call("ContentEnsure");
+    },
+    contentNavigate: function (url) {
+      return call("ContentNavigate", url);
+    },
+    contentSetVisible: function (show) {
+      return call("ContentSetVisible", !!show);
+    },
+    contentResize: function () {
+      return call("ContentResize");
+    },
+    contentSetChromeHeight: function (px) {
+      return call("ContentSetChromeHeight", px | 0);
+    },
+    contentCopySelection: function () {
+      return call("ContentCopySelection");
+    },
+    contentLastURL: function () {
+      return call("ContentLastURL");
+    },
     openURL: function (url) {
-      return call("OpenURL", url).catch(function () {
-        var el = document.createElement("a");
-        el.href = url;
-        el.target = "_blank";
-        el.rel = "noopener";
-        el.click();
-      });
+      return call("OpenURL", url);
     },
     fetchPageText: function (url) {
       return call("FetchPageText", url).then(function (t) {
@@ -58,8 +73,7 @@
     extractDocument: function (path) {
       return call("ExtractDocument", path).then(function (t) {
         return typeof t === "string" ? t : "";
-      }).catch(function (e) {
-        console.warn("[bridge] extract", e);
+      }).catch(function () {
         return "";
       });
     },
@@ -70,7 +84,6 @@
         return "";
       });
     },
-
     libraryRoot: function () {
       return call("LibraryRoot");
     },
