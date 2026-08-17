@@ -17,7 +17,7 @@ Content WebView2 is created on the **parent window UI thread**:
 3. `CreateWindowEx(WS_CHILD)` + `Chromium.Embed(host)` on that thread
 4. Navigate / resize / visibility via further UI-thread messages
 
-Fallback: if dual create fails, `Navigate` uses full-window load + floating bar.
+Fallback: if dual create fails, `Navigate` uses full-window load + floating bar.(not desirable)
 
 ## Logs to expect
 
@@ -27,5 +27,3 @@ Fallback: if dual create fails, `Navigate` uses full-window load + floating bar.
 [content] WebView2 ready on UI thread
 [content] Navigate https://...
 ```
-
-No `8007139f` / `CoInitialize has not been called`.

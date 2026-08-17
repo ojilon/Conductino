@@ -2,6 +2,11 @@
 
 This document explains **why** the chrome + content dual WebView2 layout is not working in Conductino today. It is written for someone who will fix it later. It does **not** describe alternate browsing UX.
 
+**Note:**
+**The dual webview problem has been fixed**
+**The remaining problem is viewing the search results, summary of the issue is below:**
+Omnibox Enter calls `App.Navigate` → `ContentNavigate` → second controller `Navigate(url)`. When #2 never paints, the user sees a **blank grey workspace** even though the omnibox URL updated.
+
 ---
 
 ## 1. What “dual WebView2” means here
@@ -9,14 +14,14 @@ This document explains **why** the chrome + content dual WebView2 layout is not 
 Target layout:
 
 ```
-┌──────────────────────────────────────────┐
-│  Tabs + omnibox + tool buttons           │  ← WebView2 #1 (Wails host)
-│  (HTML/CSS/JS chrome, never leaves app)  │
-├──────────────────────────────────────────┤
-│                                          │
-│  Page content (DuckDuckGo, ResearchGate) │  ← WebView2 #2 (child HWND)
-│                                          │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────-----------┐
+│  Tabs + omnibox + tool buttons                      │  ← WebView2 #1 (Wails host)
+│  (HTML/CSS/JS chrome, never leaves app)             │
+├─────────────────────────────────────────-----------─┤
+│                                                     │
+│  Page content (DuckDuckGo, website eg ResearchGate) │  ← WebView2 #2 (child HWND)
+│                                                     │
+└─────────────────────────────────────────-----------─┘
 ```
 
 - **WebView2 #1**: owned by Wails. Serves `frontend/` assets, Go bindings (`window.go.main.App.*`), Study, Library, Settings.

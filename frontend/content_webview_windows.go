@@ -43,9 +43,16 @@ const (
 	SW_HIDE        = 0
 )
 
-// GWLP_WNDPROC index (-4). Convert via int32 to uintptr to preserve negative index value.
+// GWLP_WNDPROC index (-4). Used as window long pointer value.
 const GWLP_WNDPROC = -4
-var gwlpWndProc = uintptr(int32(GWLP_WNDPROC))
+
+var gwlpWndProc int
+
+func init() {
+	// Initialize gwlpWndProc with proper -4 to uintptr conversion
+	// -4 as int32 converted to uintptr gives the correct bit pattern for GWLP_WNDPROC
+	gwlpWndProc = int(int32(GWLP_WNDPROC))
+}
 
 
 var (
@@ -181,7 +188,7 @@ func subclassParent(hwnd uintptr) error {
 	if subclassed && parentHWND == hwnd {
 		return nil
 	}
-	prev, _, _ := procSetWindowLongPtrW.Call(hwnd, gwlpWndProc, parentSubclassCallback)
+	prev, _, _ := procSetWindowLongPtrW.Call(hwnd, uintptr(gwlpWndProc), parentSubclassCallback)
 	origWndProc = prev
 	parentHWND = hwnd
 	subclassed = true
@@ -320,19 +327,40 @@ func uiCreateContent(parent uintptr) error {
 		uintptr(hInst),
 		0,
 	)
-	if host == 0 {
-		return fmt.Errorf("CreateWindowEx content host: %v", callErr)
-	}
-	procShowWindow.Call(host, uintptr(SW_SHOW))
+    
+    if host == 0 {
+        return fmt.Errorf("CreateWindowEx content host: %v", callErr)
+    }
+    // Fix Z-order: ensure content host is above the Wails webview controller.
+    // The Wails host fills the client area; we must insert our child host above it.
+    // SWP_NOMOVE = 0x0002, SWP_NOSIZE = 0x0001 - keep current position/size
+    procSetWindowPos.Call(host, 0, 0, 0, 0, 0, uintptr(0x0002)|uintptr(0x0001)|SWP_NOACTIVATE|SWP_SHOWWINDOW)
 
-	chromium := edge.NewChromium()
+    procShowWindow.Call(host, uintptr(SW_SHOW))
+
+    chromium := edge.NewChromium()
 	chromium.DataPath = contentDataPath()
 	log.Printf("[content] UI-thread Embed host=%v", host)
 
 	if !chromium.Embed(host) {
 		return fmt.Errorf("Embed returned false on UI thread")
 	}
+
+	// Check that the WebView2 controller is available after Embed.
+	// Embed() may return before the controller is fully initialized.
+	// We verify the controller exists; if not, Embed didn't create one.
+	if chromium.GetController() == nil {
+		return fmt.Errorf("WebView2 controller is nil after Embed")
+	}
+
+	// Brief delay to allow WebView2 to finish initial internal setup.
+	// After this, we re-verify the controller is still valid.
 	time.Sleep(500 * time.Millisecond)
+
+	if chromium.GetController() == nil {
+		return fmt.Errorf("WebView2 controller became nil after initialization delay")
+	}
+
 	chromium.Resize()
 
 	cb := &ContentBrowser{
