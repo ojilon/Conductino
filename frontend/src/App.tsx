@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar'
 import Welcome from './components/Welcome'
 import SettingsPanel from './components/Settings'
 import Study from './components/Study'
+import BrowserView from './components/BrowserView'
 import {
   applyTheme,
   buildSearchUrl,
@@ -18,7 +19,7 @@ import {
 } from './lib/settings'
 import { wails } from './lib/wails'
 
-type Panel = 'welcome' | 'settings' | 'study' | 'stub'
+type Panel = 'welcome' | 'settings' | 'study' | 'stub' | 'browser'
 
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings())
@@ -40,6 +41,7 @@ export default function App() {
 
   useEffect(() => {
     setOmnibox(active?.url || '')
+    if (active?.url) setPanel('browser')
   }, [active?.id, active?.url])
 
   const updateActive = useCallback((patch: Partial<Tab>) => {
@@ -55,12 +57,12 @@ export default function App() {
       const url = looksLikeUrl(raw)
         ? normalizeUrl(raw)
         : buildSearchUrl(raw, settings.engine)
-      wails.openURL(url)
       updateActive({
         url,
         title: url.replace(/^https?:\/\//, '').split('/')[0] || 'Tab',
       })
       setOmnibox(url)
+      setPanel('browser')
     },
     [settings.engine, updateActive],
   )
@@ -81,6 +83,7 @@ export default function App() {
       if (!next.length) {
         next = [{ id: nextId, title: 'New Tab', url: '', active: true }]
         setNextId((n) => n + 1)
+        setPanel('welcome')
       } else if (!next.some((t) => t.active)) {
         next = next.map((t, i) => ({ ...t, active: i === 0 }))
       }
@@ -89,7 +92,13 @@ export default function App() {
   }
 
   const activateTab = (id: number) => {
-    setTabs((prev) => prev.map((t) => ({ ...t, active: t.id === id })))
+    setTabs((prev) => {
+      const next = prev.map((t) => ({ ...t, active: t.id === id }))
+      const t = next.find((x) => x.id === id)
+      if (t?.url) setPanel('browser')
+      else setPanel('welcome')
+      return next
+    })
   }
 
   const onSidebarAction = (action: string) => {
@@ -122,14 +131,15 @@ export default function App() {
         onStudy={() => setPanel('study')}
       />
       <div className="relative flex min-h-0 flex-1">
-        <Sidebar
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          onAction={onSidebarAction}
-        />
-        <main className="content-host min-w-0 flex-1 overflow-auto bg-bg">
+        <main className="content-host min-w-0 flex-1 overflow-hidden bg-bg">
           {panel === 'welcome' && (
             <Welcome onOpenStudy={() => setPanel('study')} />
+          )}
+          {panel === 'browser' && active?.url && (
+            <BrowserView
+              url={active.url}
+              onOpenExternal={() => wails.openURL(active.url)}
+            />
           )}
           {panel === 'settings' && (
             <SettingsPanel
@@ -140,19 +150,19 @@ export default function App() {
               onEngine={(engine: EngineId) =>
                 setSettings((s) => ({ ...s, engine }))
               }
-              onDone={() => setPanel('welcome')}
+              onDone={() => setPanel(active?.url ? 'browser' : 'welcome')}
             />
           )}
           {panel === 'study' && <Study />}
           {panel === 'stub' && (
-            <div className="p-8">
+            <div className="overflow-auto p-8">
               <div className="mx-auto mt-10 max-w-lg rounded-app border border-border bg-elev p-7">
                 <h2 className="m-0 mb-2 text-[22px] font-semibold">{stub.title}</h2>
                 <p className="text-muted">{stub.body}</p>
                 <button
                   type="button"
                   className="primary-btn"
-                  onClick={() => setPanel('welcome')}
+                  onClick={() => setPanel(active?.url ? 'browser' : 'welcome')}
                 >
                   Back
                 </button>
@@ -160,6 +170,11 @@ export default function App() {
             </div>
           )}
         </main>
+        <Sidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          onAction={onSidebarAction}
+        />
       </div>
     </div>
   )

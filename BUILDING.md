@@ -1,44 +1,36 @@
 # Building Conductino
 
-**Primary path (current):** Wails v2 + vanilla HTML/CSS/JS + optional C++ backend.
+**Primary path:** Wails v2 + React / Vite / Tailwind + optional C++ backend.
 
 ## Prerequisites (Windows)
 
 - Go 1.22+
-- WebView2 runtime (usually already installed with Edge)
-- Optional: [Wails CLI](https://wails.io) — `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- Optional: CMake 3.25+ for the C++ `conductino_core` library (PDF/text extract cache)
+- Node.js 18+ (npm)
+- WebView2 runtime (usually installed with Edge)
+- [Wails CLI](https://wails.io) — `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- Optional: CMake 3.25+ for `conductino_core` (PDF/text extract cache)
 
-## Run (development)
+## Development
 
 ```bat
 cd frontend
+npm install
 go mod tidy
 wails dev
 ```
 
-Or without the CLI:
+Wails runs Vite (`frontend:dev:watcher`) and serves the React app. Config: `frontend/wails.json` (`frontend:dir` = `.`, `assetdir` = `dist`).
 
-```bat
-cd frontend
-go mod tidy
-go run .
-```
-
-You should get a normal OS window with tabs, Settings, and Study workspace.
-
-## Build a binary
+## Production binary
 
 ```bat
 cd frontend
 wails build
 ```
 
-Output is under `frontend/build/bin/` (name from `wails.json`: **Conductino**).
+Runs `npm run build` into `dist/`, embeds it, outputs under `frontend/build/bin/` (**Conductino**).
 
 ## Optional C++ backend
-
-Used for richer document extract/cache when `conductino_core.dll` is found:
 
 ```bat
 cd backend
@@ -46,15 +38,18 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-Search order for the DLL: `CONDUCTINO_CORE_DIR`, next to the exe, `backend/build`, `backend/build/Release`.
+DLL search order: `CONDUCTINO_CORE_DIR`, next to the exe, `backend/build`, `backend/build/Release`.
 
-Without the DLL, the app still runs: Go reads `.txt` / `.md` / etc.; PDF shows a clear notice.
+Without the DLL: Go still reads `.txt` / `.md` / etc.; PDF shows a notice. See [docs/concepts/TEXT_EXTRACTION.md](docs/concepts/TEXT_EXTRACTION.md).
 
 ## AI keys
 
-Settings → AI providers → paste key → **Save AI config** (replaces any previous key).  
-Default Google model: `gemini-2.5-flash`.
+Settings → AI providers → paste key → **Save AI config** (localStorage only).
 
-## Retired path
+## Retired paths
 
-The old `webview_go` dual-surface layout under `frontend/bridge/`, `frontend/shell/`, and `frontend/web/` is **retired**. Do not use it for new work. See `frontend/RETIRED_DUAL_WEBVIEW.md`.
+Do not use for new work:
+
+- `frontend/web/` — legacy vanilla UI
+- `frontend/frontend/` — nested asset dir
+- Dual-webview notes in `docs/archive/`

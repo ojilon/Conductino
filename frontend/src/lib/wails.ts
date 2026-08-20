@@ -1,6 +1,7 @@
 /**
  * Thin wrappers around Wails-generated bindings + runtime.
- * Window chrome and BrowserOpenURL use runtime (no custom Go needed).
+ * Window chrome uses runtime. In-app navigation uses an iframe in React;
+ * BrowserOpenURL is only for the optional "Open external" fallback.
  * File dialog / document extract stay on App bindings.
  */
 
@@ -27,6 +28,7 @@ function goApp(): Record<string, (...args: unknown[]) => Promise<unknown>> | nul
 }
 
 export const wails = {
+  /** System browser — only for sites that block iframe embedding. */
   openURL(url: string) {
     try {
       BrowserOpenURL(url)

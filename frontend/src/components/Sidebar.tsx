@@ -15,7 +15,7 @@ export default function Sidebar({ open, onClose, onAction }: Props) {
   if (!open) return null
   return (
     <aside
-      className="absolute bottom-0 left-0 top-0 z-20 flex w-sidebar flex-col border-r border-border bg-elev shadow-[8px_0_24px_rgba(0,0,0,0.35)]"
+      className="absolute bottom-0 right-0 top-0 z-20 flex w-sidebar flex-col border-l border-border bg-elev shadow-[-8px_0_24px_rgba(0,0,0,0.35)]"
       aria-label="Sidebar"
     >
       <div className="flex items-center justify-between px-3 pb-2 pt-3">
