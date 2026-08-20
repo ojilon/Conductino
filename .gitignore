@@ -44,6 +44,7 @@ frontend/conductino-data/
 
 #ignore wails specific files
 frontend/build/
+frontend/dist/
 
 node_modules/
 
