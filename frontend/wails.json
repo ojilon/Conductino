@@ -2,10 +2,10 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "Conductino",
   "outputfilename": "Conductino",
-  "frontend:install": "",
-  "frontend:build": "",
-  "frontend:dev:watcher": "",
-  "frontend:dev:serverUrl": "",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
   "author": {
     "name": "ojilon",
     "email": ""
@@ -18,8 +18,8 @@
     "comments": "Local-first study browser"
   },
   "debounceMS": 100,
-  "assetdir": "web",
-  "reloaddirs": "web",
+  "assetdir": "dist",
+  "reloaddirs": "src",
   "wailsjsdir": ".",
   "windows": {
     "webviewIsTransparent": false,

@@ -10,11 +10,3 @@ export function Greet(arg1:string):Promise<string>;
 export function ImportDocument(arg1:string):Promise<string>;
 
 export function OpenFile():Promise<string>;
-
-export function OpenURL(arg1:string):Promise<void>;
-
-export function WindowClose():Promise<void>;
-
-export function WindowMinimise():Promise<void>;
-
-export function WindowToggleMaximise():Promise<void>;

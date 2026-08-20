@@ -15,6 +15,7 @@ import (
 )
 
 // App is the Wails-bound application API.
+// Window chrome and BrowserOpenURL are handled from the frontend via Wails runtime.
 type App struct {
 	ctx     context.Context
 	dataDir string
@@ -39,7 +40,7 @@ func (a *App) startup(ctx context.Context) {
 	library.EnsureLibrary(a.dataDir)
 }
 
-// Greet returns a greeting string.
+// Greet returns a greeting string (smoke-test binding).
 func (a *App) Greet(name string) string {
 	if name == "" {
 		name = "researcher"
@@ -50,43 +51,6 @@ func (a *App) Greet(name string) string {
 // AppInfo returns application information map.
 func (a *App) AppInfo() map[string]string {
 	return bridge.AppInfo()
-}
-
-// WindowMinimise minimizes the application window.
-func (a *App) WindowMinimise() {
-	if a.ctx == nil {
-		return
-	}
-	runtime.WindowMinimise(a.ctx)
-}
-
-// WindowToggleMaximise toggles the application window maximization.
-func (a *App) WindowToggleMaximise() {
-	if a.ctx == nil {
-		return
-	}
-	runtime.WindowToggleMaximise(a.ctx)
-}
-
-// WindowClose closes the application window.
-func (a *App) WindowClose() {
-	if a.ctx == nil {
-		return
-	}
-	runtime.Quit(a.ctx)
-}
-
-// OpenURL opens a URL in the system default browser.
-func (a *App) OpenURL(url string) error {
-	if a.ctx == nil {
-		return fmt.Errorf("app not started")
-	}
-	url = strings.TrimSpace(url)
-	if url == "" {
-		return fmt.Errorf("empty url")
-	}
-	runtime.BrowserOpenURL(a.ctx, url)
-	return nil
 }
 
 // OpenFile shows a native file dialog and returns the selected path (or "").
@@ -116,7 +80,6 @@ func (a *App) ExtractDocument(path string) (string, error) {
 	if _, err := os.Stat(path); err != nil {
 		return "", err
 	}
-	// Try native C++ backend first, fall back to Go text extraction
 	if text, err := native.NativeDocumentExtract(path); err == nil && text != "" {
 		return text, nil
 	}
@@ -150,7 +113,6 @@ func (a *App) ImportDocument(src string) (string, error) {
 	return dest, nil
 }
 
-// extractTextGo extracts text from a file based on its extension.
 func extractTextGo(path string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
 	textExts := map[string]bool{
