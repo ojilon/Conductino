@@ -41,6 +41,14 @@ guides/
 .clangd
 frontend_combined.txt
 targeted_frontend_files.txt
+docs_combined.txt
+
+node_modules/
+tools/
+
+frontend/dist/
+frontend/build/
+backend/conductino-data/
 
 backend/build/
 backend/conductino-data/
