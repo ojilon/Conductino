@@ -42,10 +42,3 @@ Requirements: CMake ≥ 3.25, a C++23 compiler (GCC 13+, Clang 17+, MSVC recent)
 
 Page loading is owned by **webview_go** in `frontend/`. This library only persists and processes data **after** the user has content.
 
-## Go helper
-
-`frontend/bridge/native.go` is the thin Go side. Until the shared library is built and linked via cgo, it no-ops and the in-memory `handlers.NoteStore` remains active.
-
-## Features
-
-See `features/*/README.md` for notes, storage, settings, document.
