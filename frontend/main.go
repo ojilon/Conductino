@@ -10,22 +10,22 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
-//go:embed all:web
+//go:embed all:dist
 var assets embed.FS
 
 func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:            "Conductino Study Browser",
-		Width:            1280,
-		Height:           900,
-		MinWidth:         720,
-		MinHeight:        480,
-		Frameless:        false, // OS title bar: minimize / maximize / close
-		DisableResize:    false, // user can resize the app window
-		Fullscreen:       false,
-		StartHidden:      false,
+		Title:             "Conductino Study Browser",
+		Width:             1280,
+		Height:            900,
+		MinWidth:          720,
+		MinHeight:         480,
+		Frameless:         false,
+		DisableResize:     false,
+		Fullscreen:        false,
+		StartHidden:       false,
 		HideWindowOnClose: false,
 		AssetServer: &assetserver.Options{
 			Assets: assets,

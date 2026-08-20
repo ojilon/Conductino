@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+[data-theme='aurora-dark'] {
+  --bg: #0b1020;
+  --bg-elev: #141a30;
+  --bg-elev-2: #1e2745;
+  --fg: #e8ecfb;
+  --muted: #8891b4;
+  --accent: #5ee7c4;
+  --accent2: #7c7bff;
+  --border: #26305a;
+  --danger: #ff6b8a;
+  --tab-active: #1e2745;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --tabstrip-h: 38px;
+  --toolbar-h: 44px;
+  --sidebar-w: 260px;
+}
+
+[data-theme='aurora-light'] {
+  --bg: #f4f6fb;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #e8ecf6;
+  --fg: #12162a;
+  --muted: #5c6585;
+  --accent: #0d9f7e;
+  --accent2: #4f4de0;
+  --border: #c9d0e6;
+  --danger: #d9365a;
+  --tab-active: #e8ecf6;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+@layer components {
+  .tool-btn {
+    @apply h-8 w-8 shrink-0 rounded-lg text-sm text-muted hover:bg-elev2 hover:text-fg disabled:cursor-default disabled:opacity-35;
+  }
+  .tool-btn[aria-pressed='true'] {
+    @apply bg-elev2 text-accent;
+  }
+  .primary-btn {
+    @apply mt-3 h-9 rounded-app-sm bg-accent2 px-4 font-semibold text-white hover:brightness-110;
+  }
+  .field {
+    @apply my-4 flex flex-col gap-1.5;
+  }
+  .field > span {
+    @apply text-xs font-semibold text-muted;
+  }
+  .field select,
+  .field input {
+    @apply h-9 rounded-app-sm border border-border bg-bg px-2.5 text-fg outline-none focus:border-accent2;
+  }
+}
