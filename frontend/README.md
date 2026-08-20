@@ -13,11 +13,13 @@ wails dev
 
 | Path | Role |
 |------|------|
-| `main.go` | `wails.Run`, embed assets |
+| `main.go` | `wails.Run`, embed assets from `web/` |
 | `app.go` | Bound Go API (OpenURL, OpenFile, ExtractDocument, …) |
-| `native_windows.go` | Optional load of `conductino_core.dll` |
-| `frontend/` | UI assets (index, css, js, ai modules) |
+| `web/` | UI assets (index.html, css, js, ai modules) — **assetdir** |
+| `wailsjs/` | Generated JS/TS bindings (wailsjsdir = `.`) |
 | `wails.json` | Wails project config |
+
+The nested `frontend/frontend/` directory is legacy and is no longer used for assets or bindings.
 
 ## Features available now
 
