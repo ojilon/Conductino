@@ -18,9 +18,9 @@
     "comments": "Local-first study browser"
   },
   "debounceMS": 100,
-  "assetdir": "frontend",
-  "reloaddirs": "frontend",
-  "wailsjsdir": "frontend",
+  "assetdir": "web",
+  "reloaddirs": "web",
+  "wailsjsdir": ".",
   "windows": {
     "webviewIsTransparent": false,
     "windowIsTranslucent": false,
