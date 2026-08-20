@@ -1,13 +1,10 @@
 module frontend
 
-go 1.25.0
+go 1.26.5
 
 require (
-	github.com/wailsapp/go-webview2 v1.0.22
+	conductino-backend v0.0.0-00010101000000-000000000000
 	github.com/wailsapp/wails/v2 v2.14.0
-	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
-	golang.org/x/sys v0.46.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -33,11 +30,16 @@ require (
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace conductino-backend => ../backend
 
 // After pull, from frontend/:
 //   go mod tidy

@@ -44,7 +44,7 @@ frontend/conductino-data/
 
 #ignore wails specific files
 frontend/build/
-frontend/frontend/wailsjs
 
+node_modules/
 
 LOCAL_RELEASE.md

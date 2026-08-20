@@ -8,6 +8,10 @@ import (
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"conductino-backend/bridge"
+	"conductino-backend/library"
+	"conductino-backend/native"
 )
 
 // App is the Wails-bound application API.
@@ -16,10 +20,12 @@ type App struct {
 	dataDir string
 }
 
+// NewApp creates a new application instance.
 func NewApp() *App {
 	return &App{}
 }
 
+// startup initializes the application data directory and native backend.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	cwd, err := os.Getwd()
@@ -29,24 +35,24 @@ func (a *App) startup(ctx context.Context) {
 	a.dataDir = filepath.Join(cwd, "conductino-data")
 	_ = os.MkdirAll(filepath.Join(a.dataDir, "cache", "docs"), 0o755)
 	_ = os.MkdirAll(filepath.Join(a.dataDir, "imports"), 0o755)
-	NativeInit(a.dataDir)
+	native.NativeInit(a.dataDir)
+	library.EnsureLibrary(a.dataDir)
 }
 
+// Greet returns a greeting string.
 func (a *App) Greet(name string) string {
 	if name == "" {
 		name = "researcher"
 	}
-	return fmt.Sprintf("Conductino is alive, %s. Wails shell ready.", name)
+	return bridge.Greet(name)
 }
 
+// AppInfo returns application information map.
 func (a *App) AppInfo() map[string]string {
-	return map[string]string{
-		"name":    "Conductino Study Browser",
-		"version": "0.3.0",
-		"engine":  "wails-v2",
-	}
+	return bridge.AppInfo()
 }
 
+// WindowMinimise minimizes the application window.
 func (a *App) WindowMinimise() {
 	if a.ctx == nil {
 		return
@@ -54,6 +60,7 @@ func (a *App) WindowMinimise() {
 	runtime.WindowMinimise(a.ctx)
 }
 
+// WindowToggleMaximise toggles the application window maximization.
 func (a *App) WindowToggleMaximise() {
 	if a.ctx == nil {
 		return
@@ -61,6 +68,7 @@ func (a *App) WindowToggleMaximise() {
 	runtime.WindowToggleMaximise(a.ctx)
 }
 
+// WindowClose closes the application window.
 func (a *App) WindowClose() {
 	if a.ctx == nil {
 		return
@@ -108,7 +116,8 @@ func (a *App) ExtractDocument(path string) (string, error) {
 	if _, err := os.Stat(path); err != nil {
 		return "", err
 	}
-	if text, err := NativeDocumentExtract(path); err == nil && text != "" {
+	// Try native C++ backend first, fall back to Go text extraction
+	if text, err := native.NativeDocumentExtract(path); err == nil && text != "" {
 		return text, nil
 	}
 	return extractTextGo(path)
@@ -141,17 +150,17 @@ func (a *App) ImportDocument(src string) (string, error) {
 	return dest, nil
 }
 
-var textExts = map[string]bool{
-	".txt": true, ".md": true, ".markdown": true, ".csv": true, ".tsv": true,
-	".json": true, ".jsonl": true, ".log": true, ".xml": true, ".html": true,
-	".htm": true, ".css": true, ".js": true, ".ts": true, ".py": true,
-	".c": true, ".cpp": true, ".h": true, ".hpp": true, ".go": true,
-	".rs": true, ".java": true, ".yaml": true, ".yml": true, ".toml": true,
-	".ini": true, ".tex": true, ".bib": true,
-}
-
+// extractTextGo extracts text from a file based on its extension.
 func extractTextGo(path string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
+	textExts := map[string]bool{
+		".txt": true, ".md": true, ".markdown": true, ".csv": true, ".tsv": true,
+		".json": true, ".jsonl": true, ".log": true, ".xml": true, ".html": true,
+		".htm": true, ".css": true, ".js": true, ".ts": true, ".py": true,
+		".c": true, ".cpp": true, ".h": true, ".hpp": true, ".go": true,
+		".rs": true, ".java": true, ".yaml": true, ".yml": true, ".toml": true,
+		".ini": true, ".tex": true, ".bib": true,
+	}
 	if textExts[ext] || ext == "" {
 		b, err := os.ReadFile(path)
 		if err != nil {
