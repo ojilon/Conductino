@@ -19,6 +19,7 @@ set(CONDUCTINO_CORE_SOURCES
     src/storage.cpp
     src/notes.cpp
     src/settings.cpp
+    src/document.cpp
 )
 
 if(CONDUCTINO_BUILD_SHARED)
@@ -35,7 +36,6 @@ target_include_directories(conductino_core
 
 target_link_libraries(conductino_core PUBLIC project_warnings)
 
-# Export a stable C ABI name on Windows
 set_target_properties(conductino_core PROPERTIES
     OUTPUT_NAME "conductino_core"
     CXX_VISIBILITY_PRESET hidden
@@ -44,17 +44,11 @@ set_target_properties(conductino_core PROPERTIES
 
 target_compile_definitions(conductino_core PRIVATE CONDUCTINO_BUILDING=1)
 
-# ---------------------------------------------------------------------------
-# Demo (optional)
-# ---------------------------------------------------------------------------
 if(CONDUCTINO_BUILD_DEMO)
     add_executable(conductino_backend_demo src/demo_main.cpp)
     target_link_libraries(conductino_backend_demo PRIVATE conductino_core project_warnings)
 endif()
 
-# ---------------------------------------------------------------------------
-# Install (minimal)
-# ---------------------------------------------------------------------------
 install(TARGETS conductino_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib

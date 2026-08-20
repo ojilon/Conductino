@@ -15,13 +15,8 @@ bin/
 *.dylib
 *.out
 
-# === Zig Specific Builds & Cache ===
-zig-cache/
-zig-out/
-.zig-cache/
-
 # === Go Specific Files ===
-frontend-ui/frontend-ui.exe
+frontend/frontend.exe
 go.sum
 
 # === Application Runtime Data & Backups ===
@@ -40,8 +35,17 @@ data/study_vault.db
 guides/
 .clangd
 frontend_combined.txt
+docs_combined.txt
 targeted_frontend_files.txt
 
 backend/build/
 backend/conductino-data/
 frontend/conductino-data/
+
+#ignore wails specific files
+frontend/build/
+frontend/dist/
+
+node_modules/
+
+LOCAL_RELEASE.md

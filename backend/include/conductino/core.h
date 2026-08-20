@@ -60,6 +60,30 @@ CONDUCTINO_API int conductino_settings_get(const char* key, char** out_value, si
 /** Set setting key/value (UTF-8). Returns 0 on success. */
 CONDUCTINO_API int conductino_settings_set(const char* key, const char* value);
 
+/**
+ * Extract plain text from a local file path (UTF-8).
+ * Supports: .txt, .md, .csv, .json, and other UTF-8 text-like files.
+ * For PDF/DOCX: returns a short notice until a third-party extractor is linked
+ * (see backend/features/document/README.md). Uses cache under data_dir/cache/docs.
+ *
+ * Writes malloc'd UTF-8 text into *out_text; caller frees with conductino_free.
+ * Returns 0 on success, non-zero on error.
+ */
+CONDUCTINO_API int conductino_document_extract(
+    const char* path,
+    char** out_text,
+    size_t* out_len);
+
+/**
+ * Copy a file into data_dir/imports/ and return the new relative path (UTF-8).
+ * *out_rel is malloc'd; caller frees with conductino_free.
+ * Returns 0 on success.
+ */
+CONDUCTINO_API int conductino_document_import(
+    const char* src_path,
+    char** out_rel,
+    size_t* out_len);
+
 #ifdef __cplusplus
 }
 #endif
