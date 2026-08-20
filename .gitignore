@@ -46,6 +46,8 @@ frontend/conductino-data/
 frontend/build/
 frontend/dist/
 
+tools/
+
 node_modules/
 
 LOCAL_RELEASE.md
