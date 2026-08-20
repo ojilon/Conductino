@@ -39,7 +39,7 @@ docs_combined.txt
 targeted_frontend_files.txt
 docs_combined.txt
 
-node_modules/
+
 tools/
 
 frontend/dist/
