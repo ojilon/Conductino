@@ -1,83 +1,61 @@
 # Conductino Study Browser (Desktop)
 
-**Branch: `restructure`** — foundational rewrite in progress.
+Local-first research / study browser. PC counterpart of [Conductino-Android](https://github.com/ojilon/Conductino-Android).
 
-A modular research / study browser for the desktop.  
-It is the PC counterpart of [Conductino-Android](https://github.com/ojilon/Conductino-Android).
-
-### Stack
+## Stack
 
 | Layer | Technology |
 |-------|------------|
-| Shell & chrome | Go + [webview_go](https://github.com/webview/webview_go) + vanilla HTML/CSS/JS |
-| Content surface | **Native webview** (loads remote pages itself) |
-| Native core | C++23 + CMake (`backend/`) |
-| Experiments | Zig (`backend-core/`, optional) |
+| App shell | **Wails v2** + Go |
+| UI | **React 19** + **Vite** + **Tailwind CSS** (`frontend/src/`) |
+| Native core (optional) | C++23 + CMake (`backend/`) — document extract/cache, **no network** |
+| LLMs | API-agnostic TypeScript adapter (Google AI Studio, OpenRouter, Groq, …) |
 
-### Critical design rule
+## Design rules
 
-> The native webview is the only component that talks to the network for page loads.  
-> Go does **not** fetch pages and inject them into an iframe.  
-> The C++ backend does **not** perform network I/O.
+- C++ / Go backend does **not** perform network I/O for page loads.
+- Remote pages load **inside the app** (iframe content surface under chrome).
+- LLM calls run in the webview (`fetch`) with local chunking to control tokens.
+- Study workflow: open/paste sources → transfer or summarize into a knowledge document.
 
-This keeps the browser looking like a normal human-driven browser (Cloudflare, anti-bot systems, cookies, redirects, etc. work as expected) and keeps the architecture clean.
+## Quick start
 
-After a page is natively loaded and visible, the app may still inject scripts, extract text, or offer study tools (highlights, notes, reader view, …).
-
----
-
-## Quick links
-
-- Foundation & roadmap → [docs/FOUNDATION.md](docs/FOUNDATION.md)
-- GUI skeleton & extension guide → [docs/GUI.md](docs/GUI.md)
-- Docs index → [docs/README.md](docs/README.md)
-
----
-
-## Project layout (target)
-
-```
-Conductino/
-├── frontend/          # Go + webview_go + HTML/CSS/JS chrome
-├── backend/           # C++23 + CMake (storage, document, … — no network)
-├── backend-core/      # Zig experiments (kept for now)
-├── config/            # search engines, settings schema, …
-├── docs/              # foundation, GUI, themes, …
-├── frontend-ui/       # OLD working tree (to be removed after migration)
-└── …
+```bat
+cd frontend
+npm install
+go mod tidy
+wails dev
 ```
 
-See [docs/FOUNDATION.md](docs/FOUNDATION.md) for the full map and rules.
+See [BUILDING.md](BUILDING.md) for binary builds and optional C++ backend.
 
----
+## Project map
 
-## Status (restructure)
+| Path | Role |
+|------|------|
+| [`frontend/`](frontend/) | Wails app: Go bindings + React UI |
+| [`backend/`](backend/) | Optional C++ core (extract, storage stubs) |
+| [`docs/`](docs/README.md) | Architecture, guides, concepts |
+| [`tools/`](tools/) | Dev helpers |
+
+Documentation index: **[docs/README.md](docs/README.md)**
+
+Key concepts:
+
+- [Text extraction & structure](docs/concepts/TEXT_EXTRACTION.md) — plain text, AST-style trees, PDF/DOCX path
+- [AI architecture](docs/ai/ARCHITECTURE.md) — chunking, providers, knowledge blocks
+- [GUI / chrome](docs/architecture/GUI.md)
+
+## Status
 
 | Area | Status |
 |------|--------|
-| Architecture rules & docs | Done |
-| Chrome-like GUI skeleton | Next |
-| Native webview as sole content surface | Next |
-| Themes (dark/light) + multi search engines | Planned |
-| C++23 backend skeleton | Planned |
-| Migration of useful non-network logic from `frontend-ui` | Planned |
-
----
-
-## Building (will be updated as the skeleton lands)
-
-See [BUILDING.md](BUILDING.md). The old `frontend-ui` instructions still apply for the previous working tree; the new `frontend/` path will be documented as soon as the skeleton runs.
-
----
-
-## Contributing / extending
-
-- Prefer small, focused changes.
-- Add a short README in any new feature directory.
-- Follow the rules in `docs/FOUNDATION.md` (especially the native-webview network rule).
-- GUI extension points are described in `docs/GUI.md`.
-
----
+| Wails + React chrome (tabs, toolbar, right sidebar) | Working |
+| In-app URL / search (iframe surface) | Working (sites may block framing) |
+| Study split + AI summarize | Working |
+| File open / text extract | Working (PDF notice until lib linked) |
+| Full PDF / AST pipeline | Documented; partial |
+| Verifier / vision / TTS | Documented in `docs/ai/` |
 
 ## License
 
